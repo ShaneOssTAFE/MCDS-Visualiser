@@ -40,7 +40,7 @@ function processSchema(schema) {
       const hasTitle = !!data.title;
       const hasDesc = !!data.description;
       const hasProps = properties.length > 0;
-      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100; // 0-100%
+      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100;
       nodes.push({
         id,
         name: data.title || id,
@@ -50,7 +50,7 @@ function processSchema(schema) {
         size: type === 'entity' ? 8 : 6,
         properties,
         completeness,
-        cluster: type === 'entity' ? id : null // Cluster by entity
+        cluster: type === 'entity' ? id : null
       });
       seenNodes.add(id);
     }
@@ -64,9 +64,9 @@ function processSchema(schema) {
         if (seenNodes.has(targetId)) {
           links.push({ source: sourceId, target: targetId });
           const sourceNode = nodes.find(n => n.id === sourceId);
-          if (!sourceNode.cluster) sourceNode.cluster = targetId; // Cluster definitions under referenced entities
+          if (!sourceNode.cluster) sourceNode.cluster = targetId;
         } else {
-          nodes.find(n => n.id === sourceId).hasBrokenRef = true; // Flag broken refs
+          nodes.find(n => n.id === sourceId).hasBrokenRef = true;
         }
         if (key.endsWith('ID') && targetId.endsWith('ID')) {
           const entityName = targetId.replace('ID', 's');
@@ -92,10 +92,10 @@ function initGraph(nodes, links, schema) {
     .graphData({ nodes, links })
     .nodeLabel('')
     .nodeColor(node => {
-      if (node.highlighted) return '#FFFF00'; // Yellow for highlighted
-      if (node.completeness === 100) return node.group === 0 ? '#00FF00' : '#FF00FF'; // Green or magenta
-      if (node.completeness >= 50) return '#FFFF00'; // Yellow
-      return '#FF0000'; // Red
+      if (node.highlighted) return '#FFFF00';
+      if (node.completeness === 100) return node.group === 0 ? '#00FF00' : '#FF00FF';
+      if (node.completeness >= 50) return '#FFFF00';
+      return '#FF0000';
     })
     .nodeVal(node => node.size)
     .nodeOpacity(0.9)
@@ -124,16 +124,17 @@ function initGraph(nodes, links, schema) {
     .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a')
     .forceEngine('d3')
-    .d3Force('cluster', nodes => {
+    .d3Force('cluster', simNodes => {
+      const nodeArray = simNodes.nodes(); // Access nodes from D3 simulation
       const clusters = {};
-      nodes.forEach(node => {
+      nodeArray.forEach(node => {
         const clusterId = node.cluster || 'misc';
         if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
         clusters[clusterId].x += node.x || 0;
         clusters[clusterId].y += node.y || 0;
         clusters[clusterId].count++;
       });
-      nodes.forEach(node => {
+      nodeArray.forEach(node => {
         const cluster = clusters[node.cluster || 'misc'];
         node.vx += (cluster.x / cluster.count - node.x) * 0.05;
         node.vy += (cluster.y / cluster.count - node.y) * 0.05;
@@ -198,7 +199,6 @@ function initGraph(nodes, links, schema) {
     Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links });
   }
 
-  // Existing controls
   const searchInput = document.getElementById('search');
   searchInput.addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
@@ -224,7 +224,6 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
-  // Interactive Legend
   const legend = document.createElement('div');
   legend.style.position = 'absolute';
   legend.style.top = '10px';
@@ -246,8 +245,8 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
-  // Export Button
   const exportBtn = document.createElement('button');
+  exportBtn.id = 'exportBtn'; // Add ID for CSS
   exportBtn.textContent = 'Export Data';
   exportBtn.style.position = 'absolute';
   exportBtn.style.bottom = '10px';
@@ -272,7 +271,6 @@ function initGraph(nodes, links, schema) {
     URL.revokeObjectURL(url);
   });
 
-  // Interaction
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
   window.addEventListener('mousedown', () => isDragging = true);
