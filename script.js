@@ -109,7 +109,9 @@ fetch("schema.json") // Adjust the path to your JSON file
                 const sphere = new THREE.Mesh(geometry, material);
                 return sphere;
             })
-            .onNodeClick(node => {
+            .onNodeClick((node, event) => { // Explicitly capture 'event'
+                if (!event) return; // Prevent errors if event is undefined
+            
                 // Show properties in tooltip
                 const tooltip = document.getElementById("tooltip");
                 tooltip.style.display = "block";
@@ -120,7 +122,9 @@ fetch("schema.json") // Adjust the path to your JSON file
                     <em>${node.description}</em><br>
                     ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
                 `;
-                Graph.cameraPosition({ z: 300 }, node, 1000); // Zoom to node
+            
+                // Zoom to the clicked node
+                Graph.cameraPosition({ z: 300 }, node, 1000);
             })
             .onNodeHover(node => {
                 document.body.style.cursor = node ? "pointer" : "default";
