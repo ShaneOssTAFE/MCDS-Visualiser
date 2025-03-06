@@ -165,6 +165,12 @@ fetch("schema.json")
             })
             .onBackgroundClick(() => {
                 document.getElementById("tooltip").style.display = "none";
+                // Reset to show all nodes and links
+                filteredData = {
+                    nodes: graphData.nodes,
+                    links: graphData.links
+                };
+                Graph.graphData(filteredData);
             });
 
         Graph.d3Force("charge").strength(-200);
@@ -192,14 +198,23 @@ fetch("schema.json")
         // Handle search input
         document.getElementById("search").addEventListener("input", function(event) {
             const searchTerm = event.target.value.toLowerCase();
-            graphData.nodes.forEach(node => {
-                if (node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)) {
-                    node.visible = true; // Make visible if it matches
-                } else {
-                    node.visible = false; // Hide if it doesn't match
-                }
+            const filteredNodes = graphData.nodes.filter(node => 
+                node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)
+            );
+
+            const filteredLinks = graphData.links.filter(link => {
+                const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                const targetNode = graphData.nodes.find(node => node.id === link.target);
+                return sourceNode && targetNode && (
+                    sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm)
+                );
             });
-            Graph.graphData(graphData); // Refresh graph
+
+            filteredData = {
+                nodes: filteredNodes,
+                links: filteredLinks
+            };
+            Graph.graphData(filteredData); // Refresh graph
         });
 
         // Filter Entities
@@ -227,15 +242,4 @@ fetch("schema.json")
             };
             Graph.graphData(filteredData);
         });
-
-        // Add background click event to reset the graph view
-        document.getElementById("graph").addEventListener("click", () => {
-            // Reset the filter and search state to show all nodes and links
-            filteredData = {
-                nodes: graphData.nodes,
-                links: graphData.links
-            };
-            Graph.graphData(filteredData); // Refresh the graph to show all data
-        });
-    })
-    .catch(error => console.error("Error loading JSON:", error));
+    });
