@@ -29,7 +29,7 @@ function processSchema(schema) {
   });
 
   function addNode(id, data, type) {
-    if (!seenNodes.has(id) && (data.properties || type === 'entity')) { // Exclude primitive types
+    if (!seenNodes.has(id) && (data.properties || type === 'entity')) {
       const properties = data.properties 
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
@@ -37,6 +37,10 @@ function processSchema(schema) {
             description: prop.description || ''
           }))
         : [];
+      const hasTitle = !!data.title;
+      const hasDesc = !!data.description;
+      const hasProps = properties.length > 0;
+      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100; // 0-100%
       nodes.push({
         id,
         name: data.title || id,
@@ -44,7 +48,9 @@ function processSchema(schema) {
         description: data.description || '',
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
-        properties
+        properties,
+        completeness,
+        cluster: type === 'entity' ? id : null // Cluster by entity
       });
       seenNodes.add(id);
     }
@@ -57,6 +63,10 @@ function processSchema(schema) {
         const targetId = value.replace('#/definitions/', '');
         if (seenNodes.has(targetId)) {
           links.push({ source: sourceId, target: targetId });
+          const sourceNode = nodes.find(n => n.id === sourceId);
+          if (!sourceNode.cluster) sourceNode.cluster = targetId; // Cluster definitions under referenced entities
+        } else {
+          nodes.find(n => n.id === sourceId).hasBrokenRef = true; // Flag broken refs
         }
         if (key.endsWith('ID') && targetId.endsWith('ID')) {
           const entityName = targetId.replace('ID', 's');
@@ -80,16 +90,55 @@ function processSchema(schema) {
 function initGraph(nodes, links, schema) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
-    .nodeLabel('') // No default tooltip
-    .nodeColor(node => node.group === 0 ? '#00FFFF' : '#FF00FF') // Teal for entities, magenta for definitions
-    .nodeVal(node => node.size) // Size based on entity/definition
+    .nodeLabel('')
+    .nodeColor(node => {
+      if (node.highlighted) return '#FFFF00'; // Yellow for highlighted
+      if (node.completeness === 100) return node.group === 0 ? '#00FF00' : '#FF00FF'; // Green or magenta
+      if (node.completeness >= 50) return '#FFFF00'; // Yellow
+      return '#FF0000'; // Red
+    })
+    .nodeVal(node => node.size)
     .nodeOpacity(0.9)
-    .linkColor(() => '#FFFFFF') // Straight white links
+    .nodeThreeObject(node => {
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(node.size / 2),
+        new THREE.MeshBasicMaterial({ 
+          color: node.highlighted ? '#FFFF00' : (node.completeness === 100 ? (node.group === 0 ? '#00FF00' : '#FF00FF') : node.completeness >= 50 ? '#FFFF00' : '#FF0000')
+        })
+      );
+      if (node.hasBrokenRef) {
+        const outline = new THREE.Mesh(
+          new THREE.SphereGeometry(node.size / 2 + 0.5),
+          new THREE.MeshBasicMaterial({ color: '#FF0000', wireframe: true })
+        );
+        const group = new THREE.Group();
+        group.add(sphere, outline);
+        return group;
+      }
+      return sphere;
+    })
+    .linkColor(() => '#FFFFFF')
     .linkWidth(0.5)
     .linkOpacity(0.7)
     .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
-    .backgroundColor('#1a1a1a');
+    .backgroundColor('#1a1a1a')
+    .forceEngine('d3')
+    .d3Force('cluster', nodes => {
+      const clusters = {};
+      nodes.forEach(node => {
+        const clusterId = node.cluster || 'misc';
+        if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
+        clusters[clusterId].x += node.x || 0;
+        clusters[clusterId].y += node.y || 0;
+        clusters[clusterId].count++;
+      });
+      nodes.forEach(node => {
+        const cluster = clusters[node.cluster || 'misc'];
+        node.vx += (cluster.x / cluster.count - node.x) * 0.05;
+        node.vy += (cluster.y / cluster.count - node.y) * 0.05;
+      });
+    });
 
   let mouseX = 0, mouseY = 0;
   window.addEventListener('mousemove', e => {
@@ -100,6 +149,8 @@ function initGraph(nodes, links, schema) {
   Graph.onNodeHover(node => {
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = node ? 'block' : 'none';
+    nodes.forEach(n => n.highlighted = false);
+    links.forEach(l => l.highlighted = false);
     if (node) {
       tooltip.style.left = `${mouseX + 10}px`;
       tooltip.style.top = `${mouseY + 10}px`;
@@ -110,9 +161,22 @@ function initGraph(nodes, links, schema) {
         <strong>${node.name}</strong><br/>
         <em>Type:</em> ${node.type}<br/>
         <em>Description:</em> ${node.description || 'N/A'}<br/>
+        <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
         <em>Properties:</em><br/>${propList}
       `;
+      node.highlighted = true;
+      links.forEach(l => {
+        if (l.source.id === node.id) {
+          l.highlighted = true;
+          nodes.find(n => n.id === l.target.id).highlighted = true;
+        } else if (l.target.id === node.id) {
+          l.highlighted = true;
+          nodes.find(n => n.id === l.source.id).highlighted = true;
+        }
+      });
     }
+    Graph.nodeColor(n => n.highlighted ? '#FFFF00' : (n.completeness === 100 ? (n.group === 0 ? '#00FF00' : '#FF00FF') : n.completeness >= 50 ? '#FFFF00' : '#FF0000'))
+         .linkColor(l => l.highlighted ? '#FFFF00' : '#FFFFFF');
   })
   .onNodeClick(node => {
     Graph.cameraPosition(
@@ -134,6 +198,7 @@ function initGraph(nodes, links, schema) {
     Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links });
   }
 
+  // Existing controls
   const searchInput = document.getElementById('search');
   searchInput.addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
@@ -159,6 +224,55 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
+  // Interactive Legend
+  const legend = document.createElement('div');
+  legend.style.position = 'absolute';
+  legend.style.top = '10px';
+  legend.style.right = '10px';
+  legend.style.background = 'rgba(0, 0, 0, 0.8)';
+  legend.style.padding = '10px';
+  legend.style.color = '#fff';
+  legend.style.borderRadius = '5px';
+  legend.innerHTML = `
+    <div id="legend-entities" style="cursor:pointer"><span style="color:#00FF00">■</span> Entities</div>
+    <div id="legend-defs" style="cursor:pointer"><span style="color:#FF00FF">■</span> Definitions</div>
+  `;
+  document.body.appendChild(legend);
+
+  document.getElementById('legend-entities').addEventListener('click', () => {
+    updateVisibility(node => node.type === 'entity');
+  });
+  document.getElementById('legend-defs').addEventListener('click', () => {
+    updateVisibility(node => node.type === 'definition');
+  });
+
+  // Export Button
+  const exportBtn = document.createElement('button');
+  exportBtn.textContent = 'Export Data';
+  exportBtn.style.position = 'absolute';
+  exportBtn.style.bottom = '10px';
+  exportBtn.style.right = '10px';
+  exportBtn.style.padding = '8px 12px';
+  exportBtn.style.background = '#333';
+  exportBtn.style.color = '#fff';
+  exportBtn.style.border = '2px solid #fff';
+  exportBtn.style.borderRadius = '4px';
+  exportBtn.style.cursor = 'pointer';
+  document.body.appendChild(exportBtn);
+
+  exportBtn.addEventListener('click', () => {
+    const data = { nodes: nodes.filter(n => n.visible !== false), links };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'schema-export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Interaction
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
   window.addEventListener('mousedown', () => isDragging = true);
