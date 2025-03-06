@@ -125,16 +125,20 @@ function initGraph(nodes, links, schema) {
     .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a')
     .forceEngine('d3')
-    .d3Force('cluster', nodes => {
+    .d3Force('cluster', nodeArray => {
+      if (!Array.isArray(nodeArray)) {
+        console.error('Cluster force received invalid nodes:', nodeArray);
+        return; // Exit early if nodes is not an array
+      }
       const clusters = {};
-      nodes.forEach(node => {
+      nodeArray.forEach(node => {
         const clusterId = node.cluster || 'misc';
         if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
         clusters[clusterId].x += node.x || 0;
         clusters[clusterId].y += node.y || 0;
         clusters[clusterId].count++;
       });
-      nodes.forEach(node => {
+      nodeArray.forEach(node => {
         const cluster = clusters[node.cluster || 'misc'];
         node.vx += (cluster.x / cluster.count - node.x) * 0.05;
         node.vy += (cluster.y / cluster.count - node.y) * 0.05;
