@@ -1,10 +1,9 @@
-// Ensure DOM is loaded before running script
 document.addEventListener('DOMContentLoaded', () => {
   fetch('schema.json')
     .then(response => response.json())
     .then(schema => {
       const { nodes, links } = processSchema(schema);
-      initGraph(nodes, links);
+      initGraph(nodes, links, schema); // Pass schema to initGraph
     })
     .catch(error => console.error('Error loading schema:', error));
 });
@@ -31,13 +30,22 @@ function processSchema(schema) {
 
   function addNode(id, data, type) {
     if (!seenNodes.has(id)) {
+      // Extract properties and their types
+      const properties = data.properties 
+        ? Object.entries(data.properties).map(([propName, prop]) => ({
+            name: propName,
+            type: prop.type || (prop['$ref'] ? prop['$ref'].split('/').pop() : 'unknown'),
+            description: prop.description || ''
+          }))
+        : [];
       nodes.push({
         id,
         name: data.title || id,
         type,
         description: data.description || '',
         group: type === 'entity' ? 0 : 1,
-        size: type === 'entity' ? 8 : 6
+        size: type === 'entity' ? 8 : 6,
+        properties // Store properties for tooltip
       });
       seenNodes.add(id);
     }
@@ -50,6 +58,13 @@ function processSchema(schema) {
         const targetId = value.replace('#/definitions/', '');
         if (seenNodes.has(targetId)) {
           links.push({ source: sourceId, target: targetId });
+        }
+        // Infer semantic relationships from ID fields
+        if (key.endsWith('ID') && targetId.endsWith('ID')) {
+          const entityName = targetId.replace('ID', 's');
+          if (seenNodes.has(entityName)) {
+            links.push({ source: sourceId, target: entityName });
+          }
         }
       } else if (value && typeof value === 'object') {
         if (Array.isArray(value)) {
@@ -64,7 +79,7 @@ function processSchema(schema) {
   return { nodes, links };
 }
 
-function initGraph(nodes, links) {
+function initGraph(nodes, links, schema) {
   const sphereGeometry = new THREE.SphereGeometry(1, 8, 8);
   const entityMaterial = new THREE.MeshBasicMaterial({ color: '#00FFFF', transparent: true, opacity: 0.9 });
   const defMaterial = new THREE.MeshBasicMaterial({ color: '#FF00FF', transparent: true, opacity: 0.9 });
@@ -90,7 +105,7 @@ function initGraph(nodes, links) {
 
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
-    .nodeLabel('') // Disable default label tooltip
+    .nodeLabel('')
     .nodeAutoColorBy('group')
     .nodeOpacity(0.9)
     .nodeThreeObject(node => {
@@ -129,16 +144,20 @@ function initGraph(nodes, links) {
       if (node) {
         tooltip.style.left = `${mouseX + 10}px`;
         tooltip.style.top = `${mouseY + 10}px`;
+        const propList = node.properties.length > 0 
+          ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
+          : 'None';
         tooltip.innerHTML = `
           <strong>${node.name}</strong><br/>
           <em>Type:</em> ${node.type}<br/>
-          <em>Description:</em> ${node.description || 'N/A'}
+          <em>Description:</em> ${node.description || 'N/A'}<br/>
+          <em>Properties:</em><br/>${propList}
         `;
       }
     })
     .onNodeClick(node => {
       Graph.cameraPosition(
-        { x: node.x, y: node.y, z: node.z + 300 }, // Zoom in to node
+        { x: node.x, y: node.y, z: node.z + 300 },
         node,
         1000
       );
@@ -164,11 +183,11 @@ function initGraph(nodes, links) {
       const shouldBeVisible = filterFn(node);
       if (visibilityCache.get(node.id) !== shouldBeVisible) {
         visibilityCache.set(node.id, shouldBeVisible);
-        node.visible = shouldBeVisible; // Update node visibility directly
+        node.visible = shouldBeVisible;
       }
     });
-    Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links }); // Update graph data
-    Graph.refresh(); // Force re-render
+    Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links });
+    Graph.refresh();
   }
 
   const searchInput = document.getElementById('search');
@@ -187,7 +206,7 @@ function initGraph(nodes, links) {
     updateVisibility(node => node.type === 'definition');
   });
 
-const resetViewBtn = document.getElementById('resetView');
+  const resetViewBtn = document.getElementById('resetView');
   resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
