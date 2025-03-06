@@ -97,6 +97,10 @@ fetch("schema.json")
             .graphData(graphData)
             .nodeLabel(node => node.label)
             .nodeAutoColorBy('group') // Color nodes by group
+            .linkAutoColorBy(d => {
+                const sourceNode = typeof d.source === 'object' ? d.source : graphData.nodes.find(n => n.id === d.source);
+                return sourceNode ? sourceNode.group : 'default';
+            })
             .linkWidth(2)
             .linkOpacity(0.5)
             .backgroundColor("#1a1a1a")
@@ -129,7 +133,7 @@ fetch("schema.json")
                     new THREE.Vector3(1, 0, 0)
                 ]);
                 const material = new THREE.LineDashedMaterial({
-                    color: link.source.color, // Use the source node's color
+                    color: link.source.group === 'entity' ? '#00d1b2' : '#ff6b6b',
                     dashSize: 5,
                     gapSize: 3,
                     transparent: true,
@@ -143,6 +147,13 @@ fetch("schema.json")
                 Graph.scene().children.forEach(obj => {
                     if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
                 });
+
+                // Floating particle effect
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] += speeds[i]; // Move particles in x-direction
+                    if (positions[i * 3] > 1000) positions[i * 3] = -1000; // Reset when out of bounds
+                }
+                particleGeo.attributes.position.needsUpdate = true;
             })
             .onNodeClick((node, event) => {
                 if (!event) return;
@@ -161,18 +172,12 @@ fetch("schema.json")
             })
             .onBackgroundClick(() => {
                 document.getElementById("tooltip").style.display = "none";
-                // Reset to show all nodes and links
-                filteredData = {
-                    nodes: graphData.nodes,
-                    links: graphData.links
-                };
-                Graph.graphData(filteredData);
             });
 
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
 
-        // Floating particle effect setup
+        // Add floating particle background effect
         const particleCount = 1000;
         const particleGeo = new THREE.BufferGeometry();
         const positions = [];
@@ -190,55 +195,45 @@ fetch("schema.json")
 
         // Search and Filter functionality
         let filteredData = graphData;
-
-        // Handle search input
-        document.getElementById("search").addEventListener("input", function(event) {
-            const searchTerm = event.target.value.toLowerCase();
-            const filteredNodes = graphData.nodes.filter(node => 
-                node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)
-            );
-
-            const visibleNodes = new Set(filteredNodes.map(node => node.id));
-            const filteredLinks = graphData.links.filter(link => 
-                visibleNodes.has(link.source) || visibleNodes.has(link.target)
-            );
-
-            // Also include the sub-nodes for matching nodes (e.g., "organisation" and its subnodes)
-            graphData.nodes.forEach(node => {
-                if (visibleNodes.has(node.id)) {
-                    node.properties && Object.keys(node.properties).forEach(key => {
-                        const subNode = node.properties[key];
-                        if (subNode["$ref"]) {
-                            const refPath = subNode["$ref"].split("/").pop();
-                            if (graphData.nodes.find(n => n.id === refPath)) {
-                                visibleNodes.add(refPath);
-                            }
-                        }
-                    });
-                }
-            });
-
-            // Include the sub-nodes' links as well
-            const filteredSubLinks = graphData.links.filter(link => 
-                visibleNodes.has(link.source) && visibleNodes.has(link.target)
-            );
-
+        
+        // Search functionality
+        document.getElementById("search").addEventListener("input", (e) => {
+            const searchTerm = e.target.value.toLowerCase();
             filteredData = {
-                nodes: graphData.nodes.filter(node => visibleNodes.has(node.id)),
-                links: [...filteredLinks, ...filteredSubLinks] // Include both links and sub-links
+                nodes: graphData.nodes.filter(node => node.label.toLowerCase().includes(searchTerm)),
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm);
+                })
             };
-
-            Graph.graphData(filteredData); // Refresh graph
+            Graph.graphData(filteredData);
         });
 
-        // Example of button event handlers (you can modify these as per your UI requirements)
-        // Button to reset the graph
-        document.getElementById("resetButton").addEventListener("click", function() {
-            document.getElementById("search").value = ""; // Clear search field
+        // Filter Entities
+        document.getElementById("filterEntities").addEventListener("click", () => {
             filteredData = {
-                nodes: graphData.nodes,
-                links: graphData.links
+                nodes: graphData.nodes.filter(node => node.group === 'entity'),
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.group === 'entity' && targetNode.group === 'entity';
+                })
             };
-            Graph.graphData(filteredData); // Refresh graph to show all nodes/links
+            Graph.graphData(filteredData);
         });
-    });
+
+        // Filter Definitions
+        document.getElementById("filterDefs").addEventListener("click", () => {
+            filteredData = {
+                nodes: graphData.nodes.filter(node => node.group === 'definition'),
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.group === 'definition' && targetNode.group === 'definition';
+                })
+            };
+            Graph.graphData(filteredData);
+        });
+    })
+    .catch(error => console.error("Error loading JSON:", error));
