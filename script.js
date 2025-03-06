@@ -187,12 +187,13 @@ function initGraph(nodes, links) {
     updateVisibility(node => node.type === 'definition');
   });
 
-  const resetViewBtn = document.getElementById('resetView');
+const resetViewBtn = document.getElementById('resetView');
   resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
     updateVisibility(() => true);
     searchInput.value = '';
+    resetViewBtn.blur();
   });
 
   let isDragging = false;
