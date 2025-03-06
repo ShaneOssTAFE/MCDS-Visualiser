@@ -11,17 +11,14 @@ function processSchema(schema) {
   const links = [];
   const seenNodes = new Set();
 
-  // Process properties (main entities)
   Object.entries(schema.properties).forEach(([id, entity]) => {
     addNode(id, entity, 'entity');
   });
 
-  // Process definitions
   Object.entries(schema.definitions).forEach(([id, definition]) => {
     addNode(id, definition, 'definition');
   });
 
-  // Create links between nodes
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
       ? schema.properties[node.id]
@@ -37,7 +34,7 @@ function processSchema(schema) {
         type,
         description: data.description || '',
         group: type === 'entity' ? 0 : 1,
-        size: type === 'entity' ? 8 : 6 // Larger for entities
+        size: type === 'entity' ? 8 : 6
       });
       seenNodes.add(id);
     }
@@ -77,16 +74,14 @@ function initGraph(nodes, links) {
     .nodeOpacity(0.9)
     .nodeThreeObject(node => {
       const group = new THREE.Group();
-      // Glowing sphere
       const geometry = new THREE.SphereGeometry(node.size);
       const material = new THREE.MeshBasicMaterial({ 
-        color: node.group === 0 ? '#00d1b2' : '#ff6b6b', 
+        color: node.group === 0 ? '#00FFFF' : '#FF00FF', // Bright teal for entities, magenta for definitions
         transparent: true, 
         opacity: 0.9 
       });
       const sphere = new THREE.Mesh(geometry, material);
       group.add(sphere);
-      // Particle halo
       const particleGeo = new THREE.BufferGeometry();
       const positions = [];
       for (let i = 0; i < 30; i++) {
@@ -97,7 +92,7 @@ function initGraph(nodes, links) {
       }
       particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       const particleMat = new THREE.PointsMaterial({ 
-        color: node.group === 0 ? '#00d1b2' : '#ff6b6b', 
+        color: node.group === 0 ? '#00FFFF' : '#FF00FF', 
         size: 1.5, 
         transparent: true, 
         opacity: 0.5 
@@ -107,19 +102,19 @@ function initGraph(nodes, links) {
       return group;
     })
     .linkWidth(0.5)
+    .linkColor(() => '#FFFFFF') // White links
     .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
     .linkCurvature(0.25)
-    .linkDirectionalParticles(2) // Animated particles along links
+    .linkDirectionalParticles(2)
     .linkDirectionalParticleSpeed(0.01)
     .linkDirectionalParticleWidth(1)
     .linkOpacity(0.7)
     .backgroundColor('#1a1a1a')
     .onEngineTick(() => {
-      // Animate particles
       Graph.scene().children.forEach(obj => {
         if (obj.type === 'Points' && obj.parent.type === 'Group') {
-          obj.rotation.y += 0.01; // Subtle rotation for halo effect
+          obj.rotation.y += 0.01;
         }
       });
     })
@@ -139,12 +134,10 @@ function initGraph(nodes, links) {
     .onNodeClick(node => {
       Graph.centerAt(node.x, node.y, node.z, 1000);
       Graph.zoom(2, 2000);
-      // Highlight node
-      node.__threeObj.children[0].material.color.set('#ffffff');
-      setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00d1b2' : '#ff6b6b'), 2000);
+      node.__threeObj.children[0].material.color.set('#FFFFFF');
+      setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
     });
 
-  // Add starry background
   const starGeo = new THREE.BufferGeometry();
   const starPos = [];
   for (let i = 0; i < 1000; i++) {
@@ -170,12 +163,12 @@ function initGraph(nodes, links) {
     Graph.nodeVisibility(node => node.type === 'definition');
   });
 
-  // Reset view
+  // Reset view (fixed)
   document.getElementById('resetView').addEventListener('click', () => {
-    Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
-    Graph.zoom(1, 1000);
+    Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000); // Reset to initial distance
+    Graph.zoomToFit(1000, 100); // Fit all nodes in view with padding
     Graph.nodeVisibility(() => true); // Show all nodes
-    document.getElementById('search').value = '';
+    document.getElementById('search').value = ''; // Clear search input
   });
 
   // Enhanced camera controls
@@ -198,7 +191,6 @@ function initGraph(nodes, links) {
     Graph.zoom(Math.max(0.5, Math.min(5, zoom)), 200);
   });
 
-  // Responsive handling
   window.addEventListener('resize', () => {
     Graph.width(window.innerWidth);
     Graph.height(window.innerHeight);
