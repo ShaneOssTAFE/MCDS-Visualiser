@@ -1,102 +1,72 @@
 fetch('schema.json')
   .then(response => response.json())
   .then(schema => {
-    const { nodes, links, stats } = processSchema(schema);
+    const { nodes, links } = processSchema(schema);
     initGraph(nodes, links);
-    showStats(stats);
   })
   .catch(error => console.error('Error loading schema:', error));
 
 function processSchema(schema) {
   const nodes = [];
   const links = [];
-  const nodeMap = new Map();
-  const stats = {
-    entities: 0,
-    definitions: 0,
-    relationships: 0,
-    documentTypes: new Set(),
-    academicChains: []
-  };
+  const seenNodes = new Set();
 
-  // Process main entities from properties
+  // Process properties (main entities)
   Object.entries(schema.properties).forEach(([id, entity]) => {
-    addNode(id, entity, 'entity', stats);
-    if(entity.title.includes('container')) stats.entities++;
+    addNode(id, entity, 'entity');
   });
 
   // Process definitions
   Object.entries(schema.definitions).forEach(([id, definition]) => {
-    addNode(id, definition, 'definition', stats);
-    stats.definitions++;
+    addNode(id, definition, 'definition');
   });
 
-  // Create relationships with schema-specific handling
+  // Create links between nodes
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id] 
+      ? schema.properties[node.id]
       : schema.definitions[node.id];
-    
-    traverseSchema(schemaNode, node.id, stats);
-    
-    // Track academic pathways
-    if(node.id.toLowerCase().includes('programme') || node.id.toLowerCase().includes('unit')) {
-      stats.academicChains.push(node.id);
-    }
+
+    traverseProperties(schemaNode, node.id);
   });
 
-  function addNode(id, data, type, stats) {
-    if (!nodeMap.has(id)) {
-      const title = data.title || id; // Fallback to ID if title missing
-      const description = data.description || '';
-      
-      const newNode = {
+  function addNode(id, data, type) {
+    if (!seenNodes.has(id)) {
+      const safeData = data || {};
+      nodes.push({
         id,
-        name: title,
+        name: safeData.title || id, // Fallback to ID if title missing
         type,
-        description,
-        group: type === 'entity' ? 0 : 1,
-        links: 0,
-        // Fixed category detection with null checks
-        category: title.includes('Document') ? 'document' : 
-                 title.includes('Academic') ? 'academic' :
-                 (data?.awardType ? 'award' : 'general')
-      };
-  
-      if(newNode.category === 'document') {
-        stats.documentTypes.add(title.replace('container', '').trim());
-      }
-      
-      nodes.push(newNode);
-      nodeMap.set(id, newNode);
+        description: safeData.description || '',
+        group: type === 'entity' ? 0 : 1
+      });
+      seenNodes.add(id);
     }
   }
 
-  function traverseSchema(obj, sourceId, stats) {
+  function traverseProperties(obj, sourceId) {
     if (!obj || typeof obj !== 'object') return;
 
-    // Handle arrays and their items
-    if (Array.isArray(obj)) {
-      obj.forEach(item => {
-        if(item?.$ref) handleRef(item.$ref, sourceId, stats);
-        traverseSchema(item, sourceId, stats);
-      });
-      return;
-    }
-
-    // Process object properties
     Object.entries(obj).forEach(([key, value]) => {
       if (key === '$ref') {
-        handleRef(value, sourceId, stats);
-      } 
-      else if (key === 'items' && value?.$ref) {
-        handleRef(value.$ref, sourceId, stats);
+        const targetId = value.replace('#/definitions/', '');
+        if (seenNodes.has(targetId)) {
+          links.push({ source: sourceId, target: targetId });
+        }
       }
-      else if (typeof value === 'object') {
-        traverseSchema(value, sourceId, stats);
+      else if (value && typeof value === 'object') {
+        // Handle array items first
+        if (Array.isArray(value)) {
+          value.forEach(item => traverseProperties(item, sourceId));
+        } else {
+          traverseProperties(value, sourceId);
+        }
       }
     });
   }
+
+  return { nodes, links };
+}
 
   function handleRef(ref, sourceId, stats) {
     const targetId = ref.replace('#/definitions/', '');
