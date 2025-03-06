@@ -192,15 +192,14 @@ fetch("schema.json")
         // Handle search input
         document.getElementById("search").addEventListener("input", function(event) {
             const searchTerm = event.target.value.toLowerCase();
-            filteredData = {
-                nodes: graphData.nodes.filter(node => node.label.toLowerCase().includes(searchTerm)),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm);
-                })
-            };
-            Graph.graphData(filteredData);
+            graphData.nodes.forEach(node => {
+                if (node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)) {
+                    node.visible = true; // Make visible if it matches
+                } else {
+                    node.visible = false; // Hide if it doesn't match
+                }
+            });
+            Graph.graphData(graphData); // Refresh graph
         });
 
         // Filter Entities
@@ -210,12 +209,12 @@ fetch("schema.json")
                 links: graphData.links.filter(link => {
                     const sourceNode = graphData.nodes.find(node => node.id === link.source);
                     const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.group === 'entity' && targetNode.group === 'entity';
+                    return sourceNode && targetNode && sourceNode.group === 'entity' && targetNode.group === 'entity';
                 })
             };
             Graph.graphData(filteredData);
         });
-
+        
         // Filter Definitions
         document.getElementById("filterDefs").addEventListener("click", () => {
             filteredData = {
@@ -223,7 +222,7 @@ fetch("schema.json")
                 links: graphData.links.filter(link => {
                     const sourceNode = graphData.nodes.find(node => node.id === link.source);
                     const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.group === 'definition' && targetNode.group === 'definition';
+                    return sourceNode && targetNode && sourceNode.group === 'definition' && targetNode.group === 'definition';
                 })
             };
             Graph.graphData(filteredData);
