@@ -97,10 +97,6 @@ fetch("schema.json")
             .graphData(graphData)
             .nodeLabel(node => node.label)
             .nodeAutoColorBy('group') // Color nodes by group
-            .linkAutoColorBy(d => {
-                const sourceNode = typeof d.source === 'object' ? d.source : graphData.nodes.find(n => n.id === d.source);
-                return sourceNode ? sourceNode.group : 'default';
-            })
             .linkWidth(2)
             .linkOpacity(0.5)
             .backgroundColor("#1a1a1a")
@@ -202,44 +198,31 @@ fetch("schema.json")
                 node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)
             );
 
+            const visibleNodes = new Set(filteredNodes.map(node => node.id));
             const filteredLinks = graphData.links.filter(link => {
-                const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                const targetNode = graphData.nodes.find(node => node.id === link.target);
-                return sourceNode && targetNode && (
-                    sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm)
-                );
+                return visibleNodes.has(link.source) || visibleNodes.has(link.target);
+            });
+
+            // Also include the sub-nodes for matching nodes (e.g., "organisation" and its subnodes)
+            graphData.nodes.forEach(node => {
+                if (visibleNodes.has(node.id)) {
+                    node.properties && Object.keys(node.properties).forEach(key => {
+                        const subNode = node.properties[key];
+                        if (subNode["$ref"]) {
+                            const refPath = subNode["$ref"].split("/").pop();
+                            if (graphData.nodes.find(n => n.id === refPath)) {
+                                visibleNodes.add(refPath);
+                            }
+                        }
+                    });
+                }
             });
 
             filteredData = {
-                nodes: filteredNodes,
+                nodes: graphData.nodes.filter(node => visibleNodes.has(node.id)),
                 links: filteredLinks
             };
-            Graph.graphData(filteredData); // Refresh graph
-        });
 
-        // Filter Entities
-        document.getElementById("filterEntities").addEventListener("click", () => {
-            filteredData = {
-                nodes: graphData.nodes.filter(node => node.group === 'entity'),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode && targetNode && sourceNode.group === 'entity' && targetNode.group === 'entity';
-                })
-            };
-            Graph.graphData(filteredData);
-        });
-        
-        // Filter Definitions
-        document.getElementById("filterDefs").addEventListener("click", () => {
-            filteredData = {
-                nodes: graphData.nodes.filter(node => node.group === 'definition'),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode && targetNode && sourceNode.group === 'definition' && targetNode.group === 'definition';
-                })
-            };
-            Graph.graphData(filteredData);
+            Graph.graphData(filteredData); // Refresh graph
         });
     });
