@@ -1,3 +1,4 @@
+// script.js
 fetch('schema.json')
   .then(response => response.json())
   .then(schema => {
@@ -9,67 +10,59 @@ fetch('schema.json')
 function processSchema(schema) {
   const nodes = [];
   const links = [];
-  const nodeMap = new Map(); // More efficient than Set for lookups
+  const seenNodes = new Set();
 
-  // Unified node processing with schema-specific handling
-  const processNode = (id, data, type) => {
-    if (!nodeMap.has(id)) {
-      const title = data.title || id.replace(/([A-Z])/g, ' $1').trim(); // Convert camelCase to title
-      const category = type === 'entity' ? 'Container' : 
-                      id.toLowerCase().includes('id') ? 'Identifier' :
-                      'Component';
-      
-      const node = {
-        id,
-        name: title,
-        type,
-        category,
-        description: data.description || `No description for ${title}`,
-        group: type === 'entity' ? 0 : 1,
-        links: 0
-      };
-      
-      nodes.push(node);
-      nodeMap.set(id, node);
-    }
-  };
+  // Process properties (main entities)
+  Object.entries(schema.properties).forEach(([id, entity]) => {
+    addNode(id, entity, 'entity');
+  });
 
-  // Process schema structure
-  Object.entries(schema.properties).forEach(([id, entity]) => processNode(id, entity, 'entity'));
-  Object.entries(schema.definitions).forEach(([id, def]) => processNode(id, def, 'definition'));
+  // Process definitions
+  Object.entries(schema.definitions).forEach(([id, definition]) => {
+    addNode(id, definition, 'definition');
+  });
 
-  // Enhanced reference detection with array handling
-  const findRefs = (obj, sourceId) => {
-    if (!obj || typeof obj !== 'object') return;
-    
-    // Handle array items first
-    if (Array.isArray(obj)) {
-      obj.forEach(item => findRefs(item, sourceId));
-      return;
-    }
-
-    // Check for direct $ref
-    if (obj.$ref) {
-      const targetId = obj.$ref.replace('#/definitions/', '');
-      if (nodeMap.has(targetId)) {
-        links.push({ source: sourceId, target: targetId });
-        nodeMap.get(sourceId).links++;
-      }
-    }
-
-    // Recursive property check
-    Object.values(obj).forEach(value => {
-      if (typeof value === 'object') findRefs(value, sourceId);
-    });
-  };
-
-  // Process relationships
+  // Create links between nodes
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id] 
+      ? schema.properties[node.id]
       : schema.definitions[node.id];
-    findRefs(schemaNode, node.id);
+
+    traverseProperties(schemaNode, node.id);
   });
+
+  function addNode(id, data, type) {
+    if (!seenNodes.has(id)) {
+      nodes.push({
+        id,
+        name: data.title || id,
+        type,
+        description: data.description || '',
+        group: type === 'entity' ? 0 : 1
+      });
+      seenNodes.add(id);
+    }
+  }
+
+  function traverseProperties(obj, sourceId) {
+    if (!obj || typeof obj !== 'object') return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (key === '$ref') {
+        const targetId = value.replace('#/definitions/', '');
+        if (seenNodes.has(targetId)) {
+          links.push({ source: sourceId, target: targetId });
+        }
+      }
+      else if (value && typeof value === 'object') {
+        if (Array.isArray(value)) {
+          value.forEach(item => traverseProperties(item, sourceId));
+        } else {
+          traverseProperties(value, sourceId);
+        }
+      }
+    });
+  }
 
   return { nodes, links };
 }
@@ -78,68 +71,70 @@ function initGraph(nodes, links) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
     .nodeLabel(node => `
-      <strong>${node.name}</strong><br>
-      <em>${node.category}</em><br>
-      ${node.description}
+      <strong>${node.name}</strong><br/>
+      <em>${node.type}</em><br/>
+      ${node.description || ''}
     `)
-    .nodeAutoColorBy('category')
-    .nodeValence(node => Math.min(node.links * 2, 8))
-    .nodeResolution(20)
-    .linkDirectionalArrowLength(6)
-    .linkCurvature(0.2)
-    .linkWidth(0.8)
+    .nodeAutoColorBy('group')
+    .nodeResolution(16)
+    .nodeOpacity(0.9)
+    .linkWidth(0.5)
+    .linkDirectionalArrowLength(4)
+    .linkDirectionalArrowRelPos(1)
+    .linkCurvature(0.25)
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
-      tooltip.innerHTML = node ? `
-        <strong>${node.name}</strong><br>
-        Type: ${node.type}<br>
-        Connections: ${node.links}<br>
-        ${node.description}
-      ` : '';
+      if (node) {
+        tooltip.innerHTML = `
+          <strong>${node.name}</strong><br/>
+          <em>Type:</em> ${node.type}<br/>
+          <em>Description:</em> ${node.description || 'N/A'}
+        `;
+      }
     })
     .onNodeClick(node => {
-      Graph.zoomToFit(400, 1000, n => n.id === node.id);
+      Graph.centerAt(node.x, node.y, node.z, 1000);
+      Graph.zoom(2, 2000);
     });
 
-  // Physics optimization for educational schema
+    // Physics optimization for educational schema
   Graph.d3Force('charge').strength(-100)
        .d3Force('link').distance(150)
        .d3Force('center').strength(0.05);
 
-  // Enhanced search
+  // Search functionality
   document.getElementById('search').addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
     Graph.nodeVisibility(node => 
-      node.name.toLowerCase().includes(term) || 
-      node.description.toLowerCase().includes(term)
+      node.name.toLowerCase().includes(term)
     );
   });
 
-  // Filter controls with visual feedback
-  const setFilter = (type) => {
-    Graph.nodeVisibility(node => node.type === type)
-        .linkVisibility(link => 
-          nodes[link.source].type === type || 
-          nodes[link.target].type === type
-        );
-  };
-  
-  document.getElementById('filterEntities').addEventListener('click', () => setFilter('entity'));
-  document.getElementById('filterDefs').addEventListener('click', () => setFilter('definition'));
-
-  // Camera controls with inertia
-  let dragTimeout;
-  window.addEventListener('mousemove', e => {
-    if (!dragTimeout && e.buttons === 1) {
-      Graph.cameraPosition({
-        x: Graph.cameraPosition().x + e.movementX,
-        y: Graph.cameraPosition().y - e.movementY
-      });
-      dragTimeout = setTimeout(() => dragTimeout = null, 50);
-    }
+  // Filter controls
+  document.getElementById('filterEntities').addEventListener('click', () => {
+    Graph.nodeVisibility(node => node.type === 'entity');
   });
 
-  // Auto-fit on load
-  setTimeout(() => Graph.zoomToFit(2000, 200), 500);
+  document.getElementById('filterDefs').addEventListener('click', () => {
+    Graph.nodeVisibility(node => node.type === 'definition');
+  });
+
+  // Camera controls
+  let isDragging = false;
+  window.addEventListener('mousedown', () => isDragging = true);
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    Graph.cameraPosition({
+      x: Graph.cameraPosition().x + e.movementX * 2,
+      y: Graph.cameraPosition().y - e.movementY * 2
+    });
+  });
+
+  // Responsive handling
+  window.addEventListener('resize', () => {
+    Graph.width(window.innerWidth);
+    Graph.height(window.innerHeight);
+  });
 }
