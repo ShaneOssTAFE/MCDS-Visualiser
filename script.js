@@ -88,8 +88,9 @@ function processSchema(schema) {
 }
 
 function initGraph(nodes, links, schema) {
-  const Graph = ForceGraph3D()(document.getElementById('graph'))
-    .graphData({ nodes, links })
+  const Graph = ForceGraph3D()(document.getElementById('graph'));
+
+  Graph.graphData({ nodes, links })
     .nodeLabel(node => node.highlighted ? node.name : '')
     .nodeColor(node => {
       if (node.highlighted) return '#FFFF00';
@@ -124,7 +125,7 @@ function initGraph(nodes, links, schema) {
     .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a')
     .forceEngine('d3')
-    .d3Force('cluster', nodes => { // Fix: Use nodes directly
+    .d3Force('cluster', nodes => {
       const clusters = {};
       nodes.forEach(node => {
         const clusterId = node.cluster || 'misc';
@@ -177,15 +178,17 @@ function initGraph(nodes, links, schema) {
     }
     Graph.nodeColor(n => n.highlighted ? '#FFFF00' : (n.completeness === 100 ? (n.group === 0 ? '#00FF00' : '#FF00FF') : n.completeness >= 50 ? '#FFFF00' : '#FF0000'))
          .linkColor(l => l.highlighted ? '#FFFF00' : '#FFFFFF');
-  })
-  .onNodeClick(node => {
+  });
+
+  Graph.onNodeClick(node => {
     Graph.cameraPosition(
       { x: node.x, y: node.y, z: node.z + 300 },
       node,
       1000
     );
-  })
-  .onNodeDoubleClick(node => {
+  });
+
+  Graph.onNodeDoubleClick(node => {
     const clusterNodes = nodes.filter(n => n.cluster === node.cluster && n.visible !== false);
     const center = clusterNodes.reduce((acc, n) => ({ x: acc.x + n.x, y: acc.y + n.y, z: acc.z + n.z }), { x: 0, y: 0, z: 0 });
     center.x /= clusterNodes.length;
