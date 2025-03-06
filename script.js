@@ -90,7 +90,7 @@ function processSchema(schema) {
 function initGraph(nodes, links, schema) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
-    .nodeLabel('')
+    .nodeLabel(node => node.highlighted ? node.name : '')
     .nodeColor(node => {
       if (node.highlighted) return '#FFFF00';
       if (node.completeness === 100) return node.group === 0 ? '#00FF00' : '#FF00FF';
@@ -124,17 +124,16 @@ function initGraph(nodes, links, schema) {
     .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a')
     .forceEngine('d3')
-    .d3Force('cluster', simNodes => {
-      const nodeArray = simNodes.nodes(); // Access nodes from D3 simulation
+    .d3Force('cluster', nodes => { // Fix: Use nodes directly
       const clusters = {};
-      nodeArray.forEach(node => {
+      nodes.forEach(node => {
         const clusterId = node.cluster || 'misc';
         if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
         clusters[clusterId].x += node.x || 0;
         clusters[clusterId].y += node.y || 0;
         clusters[clusterId].count++;
       });
-      nodeArray.forEach(node => {
+      nodes.forEach(node => {
         const cluster = clusters[node.cluster || 'misc'];
         node.vx += (cluster.x / cluster.count - node.x) * 0.05;
         node.vy += (cluster.y / cluster.count - node.y) * 0.05;
@@ -185,6 +184,18 @@ function initGraph(nodes, links, schema) {
       node,
       1000
     );
+  })
+  .onNodeDoubleClick(node => {
+    const clusterNodes = nodes.filter(n => n.cluster === node.cluster && n.visible !== false);
+    const center = clusterNodes.reduce((acc, n) => ({ x: acc.x + n.x, y: acc.y + n.y, z: acc.z + n.z }), { x: 0, y: 0, z: 0 });
+    center.x /= clusterNodes.length;
+    center.y /= clusterNodes.length;
+    center.z /= clusterNodes.length;
+    Graph.cameraPosition(
+      { x: center.x, y: center.y, z: center.z + 300 },
+      center,
+      1000
+    );
   });
 
   let visibilityCache = new Map();
@@ -224,6 +235,48 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
+  const completenessFilter = document.createElement('input');
+  completenessFilter.type = 'range';
+  completenessFilter.min = '0';
+  completenessFilter.max = '100';
+  completenessFilter.value = '0';
+  completenessFilter.style.width = '200px';
+  completenessFilter.style.margin = '5px';
+  document.getElementById('controls').appendChild(completenessFilter);
+
+  const completenessLabel = document.createElement('span');
+  completenessLabel.textContent = 'Min Completeness: 0%';
+  document.getElementById('controls').appendChild(completenessLabel);
+
+  completenessFilter.addEventListener('input', e => {
+    const minCompleteness = parseInt(e.target.value);
+    completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
+    updateVisibility(node => node.completeness >= minCompleteness);
+  });
+
+  let savedPosition = null;
+  const saveViewBtn = document.createElement('button');
+  saveViewBtn.textContent = 'Save View';
+  saveViewBtn.style.margin = '5px';
+  document.getElementById('controls').appendChild(saveViewBtn);
+  
+  const restoreViewBtn = document.createElement('button');
+  restoreViewBtn.textContent = 'Restore View';
+  restoreViewBtn.style.margin = '5px';
+  document.getElementById('controls').appendChild(restoreViewBtn);
+
+  saveViewBtn.addEventListener('click', () => {
+    savedPosition = Graph.cameraPosition();
+    saveViewBtn.blur();
+  });
+
+  restoreViewBtn.addEventListener('click', () => {
+    if (savedPosition) {
+      Graph.cameraPosition(savedPosition, null, 1000);
+    }
+    restoreViewBtn.blur();
+  });
+
   const legend = document.createElement('div');
   legend.style.position = 'absolute';
   legend.style.top = '10px';
@@ -245,8 +298,25 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
+  const qualityPanel = document.createElement('div');
+  qualityPanel.style.position = 'absolute';
+  qualityPanel.style.top = '60px';
+  qualityPanel.style.right = '10px';
+  qualityPanel.style.background = 'rgba(0, 0, 0, 0.8)';
+  qualityPanel.style.padding = '10px';
+  qualityPanel.style.color = '#fff';
+  qualityPanel.style.borderRadius = '5px';
+  const avgCompleteness = nodes.reduce((sum, node) => sum + node.completeness, 0) / nodes.length;
+  const brokenRefs = nodes.filter(n => n.hasBrokenRef).length;
+  qualityPanel.innerHTML = `
+    <strong>Data Quality Summary</strong><br/>
+    Avg. Completeness: ${avgCompleteness.toFixed(0)}%<br/>
+    Broken References: ${brokenRefs}
+  `;
+  document.body.appendChild(qualityPanel);
+
   const exportBtn = document.createElement('button');
-  exportBtn.id = 'exportBtn'; // Add ID for CSS
+  exportBtn.id = 'exportBtn';
   exportBtn.textContent = 'Export Data';
   exportBtn.style.position = 'absolute';
   exportBtn.style.bottom = '10px';
