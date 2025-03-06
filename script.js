@@ -147,13 +147,6 @@ fetch("schema.json")
                 Graph.scene().children.forEach(obj => {
                     if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
                 });
-
-                // Floating particle effect
-                for (let i = 0; i < particleCount; i++) {
-                    positions[i * 3] += speeds[i]; // Move particles in x-direction
-                    if (positions[i * 3] > 1000) positions[i * 3] = -1000; // Reset when out of bounds
-                }
-                particleGeo.attributes.position.needsUpdate = true;
             })
             .onNodeClick((node, event) => {
                 if (!event) return;
@@ -177,7 +170,7 @@ fetch("schema.json")
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
 
-        // Add floating particle background effect
+        // Floating particle effect setup
         const particleCount = 1000;
         const particleGeo = new THREE.BufferGeometry();
         const positions = [];
@@ -195,10 +188,10 @@ fetch("schema.json")
 
         // Search and Filter functionality
         let filteredData = graphData;
-        
-        // Search functionality
-        document.getElementById("search").addEventListener("input", (e) => {
-            const searchTerm = e.target.value.toLowerCase();
+
+        // Handle search input
+        document.getElementById("search").addEventListener("input", function(event) {
+            const searchTerm = event.target.value.toLowerCase();
             filteredData = {
                 nodes: graphData.nodes.filter(node => node.label.toLowerCase().includes(searchTerm)),
                 links: graphData.links.filter(link => {
@@ -237,39 +230,3 @@ fetch("schema.json")
         });
     })
     .catch(error => console.error("Error loading JSON:", error));
-
-// Handle search input
-document.getElementById("search").addEventListener("input", function(event) {
-    const searchTerm = event.target.value.toLowerCase();
-    graphData.nodes.forEach(node => {
-        if (node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)) {
-            node.visible = true; // Make visible if it matches
-        } else {
-            node.visible = false; // Hide if it doesn't match
-        }
-    });
-    Graph.graphData(graphData); // Refresh graph
-});
-
-// Filter nodes by group: Entities or Definitions
-document.getElementById("filterEntities").addEventListener("click", function() {
-    graphData.nodes.forEach(node => {
-        if (node.group === 'entity') {
-            node.visible = true; // Show entities
-        } else {
-            node.visible = false; // Hide non-entities
-        }
-    });
-    Graph.graphData(graphData); // Refresh graph
-});
-
-document.getElementById("filterDefs").addEventListener("click", function() {
-    graphData.nodes.forEach(node => {
-        if (node.group === 'definition') {
-            node.visible = true; // Show definitions
-        } else {
-            node.visible = false; // Hide non-definitions
-        }
-    });
-    Graph.graphData(graphData); // Refresh graph
-});
