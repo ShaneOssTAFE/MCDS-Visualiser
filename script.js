@@ -47,20 +47,24 @@ function processSchema(schema) {
 
   function addNode(id, data, type, stats) {
     if (!nodeMap.has(id)) {
+      const title = data.title || id; // Fallback to ID if title missing
+      const description = data.description || '';
+      
       const newNode = {
         id,
-        name: data.title || id,
+        name: title,
         type,
-        description: data.description || '',
+        description,
         group: type === 'entity' ? 0 : 1,
         links: 0,
-        category: data.title.includes('Document') ? 'document' : 
-                 data.title.includes('Academic') ? 'academic' :
-                 'general'
+        // Fixed category detection with null checks
+        category: title.includes('Document') ? 'document' : 
+                 title.includes('Academic') ? 'academic' :
+                 (data?.awardType ? 'award' : 'general')
       };
-      
+  
       if(newNode.category === 'document') {
-        stats.documentTypes.add(data.title.replace('container', '').trim());
+        stats.documentTypes.add(title.replace('container', '').trim());
       }
       
       nodes.push(newNode);
