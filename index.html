@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Data Model Visualization</title>
+    <style>
+        body { margin: 0; background: #1a1a1a; color: #fff; font-family: 'Overpass', sans-serif; }
+        #graph { width: 100vw; height: 100vh; }
+        .tooltip { position: absolute; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 5px; display: none; }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <div id="tooltip" class="tooltip"></div>
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
