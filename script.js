@@ -87,6 +87,8 @@ function initGraph(nodes, links, schema) {
     .linkColor(() => '#FFFFFF') // Straight white links
     .linkWidth(0.5)
     .linkOpacity(0.7)
+    .linkDirectionalArrowLength(4)
+    .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a');
 
   let mouseX = 0, mouseY = 0;
