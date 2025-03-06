@@ -129,7 +129,7 @@ fetch("schema.json")
                     new THREE.Vector3(1, 0, 0)
                 ]);
                 const material = new THREE.LineDashedMaterial({
-                    color: link.source.group === 'entity' ? '#00d1b2' : '#ff6b6b',
+                    color: link.source.color, // Use the source node's color
                     dashSize: 5,
                     gapSize: 3,
                     transparent: true,
@@ -199,9 +199,9 @@ fetch("schema.json")
             );
 
             const visibleNodes = new Set(filteredNodes.map(node => node.id));
-            const filteredLinks = graphData.links.filter(link => {
-                return visibleNodes.has(link.source) || visibleNodes.has(link.target);
-            });
+            const filteredLinks = graphData.links.filter(link => 
+                visibleNodes.has(link.source) || visibleNodes.has(link.target)
+            );
 
             // Also include the sub-nodes for matching nodes (e.g., "organisation" and its subnodes)
             graphData.nodes.forEach(node => {
@@ -218,9 +218,14 @@ fetch("schema.json")
                 }
             });
 
+            // Include the sub-nodes' links as well
+            const filteredSubLinks = graphData.links.filter(link => 
+                visibleNodes.has(link.source) && visibleNodes.has(link.target)
+            );
+
             filteredData = {
                 nodes: graphData.nodes.filter(node => visibleNodes.has(node.id)),
-                links: filteredLinks
+                links: [...filteredLinks, ...filteredSubLinks] // Include both links and sub-links
             };
 
             Graph.graphData(filteredData); // Refresh graph
