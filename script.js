@@ -147,6 +147,13 @@ fetch("schema.json")
                 Graph.scene().children.forEach(obj => {
                     if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
                 });
+
+                // Floating particle effect
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] += speeds[i]; // Move particles in x-direction
+                    if (positions[i * 3] > 1000) positions[i * 3] = -1000; // Reset when out of bounds
+                }
+                particleGeo.attributes.position.needsUpdate = true;
             })
             .onNodeClick((node, event) => {
                 if (!event) return;
@@ -169,6 +176,22 @@ fetch("schema.json")
 
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
+
+        // Add floating particle background effect
+        const particleCount = 1000;
+        const particleGeo = new THREE.BufferGeometry();
+        const positions = [];
+        const speeds = [];
+        const particleMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, transparent: true, opacity: 0.6 });
+
+        for (let i = 0; i < particleCount; i++) {
+            positions.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
+            speeds.push(Math.random() * 0.2 + 0.1);  // Random speed for each particle
+        }
+
+        particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        const particles = new THREE.Points(particleGeo, particleMat);
+        Graph.scene().add(particles);
 
         // Search and Filter functionality
         let filteredData = graphData;
