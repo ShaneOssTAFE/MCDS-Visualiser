@@ -230,4 +230,15 @@ fetch("schema.json")
 
             Graph.graphData(filteredData); // Refresh graph
         });
+
+        // Example of button event handlers (you can modify these as per your UI requirements)
+        // Button to reset the graph
+        document.getElementById("resetButton").addEventListener("click", function() {
+            document.getElementById("search").value = ""; // Clear search field
+            filteredData = {
+                nodes: graphData.nodes,
+                links: graphData.links
+            };
+            Graph.graphData(filteredData); // Refresh graph to show all nodes/links
+        });
     });
