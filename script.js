@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(response => response.json())
     .then(schema => {
       const { nodes, links } = processSchema(schema);
-      initGraph(nodes, links, schema); // Pass schema to initGraph
+      initGraph(nodes, links, schema);
     })
     .catch(error => console.error('Error loading schema:', error));
 });
@@ -29,8 +29,7 @@ function processSchema(schema) {
   });
 
   function addNode(id, data, type) {
-    if (!seenNodes.has(id)) {
-      // Extract properties and their types
+    if (!seenNodes.has(id) && (data.properties || type === 'entity')) { // Exclude primitive types
       const properties = data.properties 
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
@@ -45,7 +44,7 @@ function processSchema(schema) {
         description: data.description || '',
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
-        properties // Store properties for tooltip
+        properties
       });
       seenNodes.add(id);
     }
@@ -59,7 +58,6 @@ function processSchema(schema) {
         if (seenNodes.has(targetId)) {
           links.push({ source: sourceId, target: targetId });
         }
-        // Infer semantic relationships from ID fields
         if (key.endsWith('ID') && targetId.endsWith('ID')) {
           const entityName = targetId.replace('ID', 's');
           if (seenNodes.has(entityName)) {
@@ -80,22 +78,16 @@ function processSchema(schema) {
 }
 
 function initGraph(nodes, links, schema) {
-  const sphereGeometry = new THREE.SphereGeometry(1, 8, 8);
-  const entityMaterial = new THREE.MeshBasicMaterial({ color: '#00FFFF', transparent: true, opacity: 0.9 });
-  const defMaterial = new THREE.MeshBasicMaterial({ color: '#FF00FF', transparent: true, opacity: 0.9 });
-  const particleGeometry = new THREE.BufferGeometry();
-  const particlePositions = new Float32Array(15 * 3);
-  for (let i = 0; i < 15; i++) {
-    const theta = Math.random() * 2 * Math.PI;
-    const phi = Math.acos(2 * Math.random() - 1);
-    const r = 8 + Math.random() * 2;
-    particlePositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    particlePositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-    particlePositions[i * 3 + 2] = r * Math.cos(phi);
-  }
-  particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-  const entityParticleMat = new THREE.PointsMaterial({ color: '#00FFFF', size: 1.5, transparent: true, opacity: 0.5 });
-  const defParticleMat = new THREE.PointsMaterial({ color: '#FF00FF', size: 1.5, transparent: true, opacity: 0.5 });
+  const Graph = ForceGraph3D()(document.getElementById('graph'))
+    .graphData({ nodes, links })
+    .nodeLabel('') // No default tooltip
+    .nodeColor(node => node.group === 0 ? '#00FFFF' : '#FF00FF') // Teal for entities, magenta for definitions
+    .nodeVal(node => node.size) // Size based on entity/definition
+    .nodeOpacity(0.9)
+    .linkColor(() => '#FFFFFF') // Straight white links
+    .linkWidth(0.5)
+    .linkOpacity(0.7)
+    .backgroundColor('#1a1a1a');
 
   let mouseX = 0, mouseY = 0;
   window.addEventListener('mousemove', e => {
@@ -103,79 +95,30 @@ function initGraph(nodes, links, schema) {
     mouseY = e.clientY;
   });
 
-  const Graph = ForceGraph3D()(document.getElementById('graph'))
-    .graphData({ nodes, links })
-    .nodeLabel('')
-    .nodeAutoColorBy('group')
-    .nodeOpacity(0.9)
-    .nodeThreeObject(node => {
-      const group = new THREE.Group();
-      const material = node.group === 0 ? entityMaterial : defMaterial;
-      const sphere = new THREE.Mesh(sphereGeometry, material);
-      sphere.scale.setScalar(node.size);
-      group.add(sphere);
-      const particleMat = node.group === 0 ? entityParticleMat : defParticleMat;
-      const particles = new THREE.Points(particleGeometry, particleMat);
-      group.add(particles);
-      return group;
-    })
-    .linkWidth(0.5)
-    .linkColor(() => '#FFFFFF')
-    .linkDirectionalArrowLength(4)
-    .linkDirectionalArrowRelPos(1)
-    .linkCurvature(0.25)
-    .linkDirectionalParticles(1)
-    .linkDirectionalParticleSpeed(0.01)
-    .linkDirectionalParticleWidth(1)
-    .linkOpacity(0.7)
-    .backgroundColor('#1a1a1a')
-    .onEngineTick(() => {
-      if (performance.now() % 5 < 1) {
-        Graph.scene().children.forEach(obj => {
-          if (obj.type === 'Points' && obj.parent.type === 'Group') {
-            obj.rotation.y += 0.01;
-          }
-        });
-      }
-    })
-    .onNodeHover(node => {
-      const tooltip = document.getElementById('tooltip');
-      tooltip.style.display = node ? 'block' : 'none';
-      if (node) {
-        tooltip.style.left = `${mouseX + 10}px`;
-        tooltip.style.top = `${mouseY + 10}px`;
-        const propList = node.properties.length > 0 
-          ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
-          : 'None';
-        tooltip.innerHTML = `
-          <strong>${node.name}</strong><br/>
-          <em>Type:</em> ${node.type}<br/>
-          <em>Description:</em> ${node.description || 'N/A'}<br/>
-          <em>Properties:</em><br/>${propList}
-        `;
-      }
-    })
-    .onNodeClick(node => {
-      Graph.cameraPosition(
-        { x: node.x, y: node.y, z: node.z + 300 },
-        node,
-        1000
-      );
-      node.__threeObj.children[0].material.color.set('#FFFFFF');
-      setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
-    });
-
-  const starGeo = new THREE.BufferGeometry();
-  const starPos = new Float32Array(500 * 3);
-  for (let i = 0; i < 500; i++) {
-    starPos[i * 3] = (Math.random() - 0.5) * 2000;
-    starPos[i * 3 + 1] = (Math.random() - 0.5) * 2000;
-    starPos[i * 3 + 2] = (Math.random() - 0.5) * 2000;
-  }
-  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
-  const stars = new THREE.Points(starGeo, starMat);
-  Graph.scene().add(stars);
+  Graph.onNodeHover(node => {
+    const tooltip = document.getElementById('tooltip');
+    tooltip.style.display = node ? 'block' : 'none';
+    if (node) {
+      tooltip.style.left = `${mouseX + 10}px`;
+      tooltip.style.top = `${mouseY + 10}px`;
+      const propList = node.properties.length > 0 
+        ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
+        : 'None';
+      tooltip.innerHTML = `
+        <strong>${node.name}</strong><br/>
+        <em>Type:</em> ${node.type}<br/>
+        <em>Description:</em> ${node.description || 'N/A'}<br/>
+        <em>Properties:</em><br/>${propList}
+      `;
+    }
+  })
+  .onNodeClick(node => {
+    Graph.cameraPosition(
+      { x: node.x, y: node.y, z: node.z + 300 },
+      node,
+      1000
+    );
+  });
 
   let visibilityCache = new Map();
   function updateVisibility(filterFn) {
@@ -187,7 +130,6 @@ function initGraph(nodes, links, schema) {
       }
     });
     Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links });
-    Graph.refresh();
   }
 
   const searchInput = document.getElementById('search');
@@ -229,6 +171,7 @@ function initGraph(nodes, links, schema) {
     });
     previousMousePosition = { x: e.clientX, y: e.clientY };
   });
+
   window.addEventListener('wheel', e => {
     const currentDistance = Graph.cameraDistance();
     const newDistance = currentDistance * (e.deltaY > 0 ? 1.1 : 0.9);
