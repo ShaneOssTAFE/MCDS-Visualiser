@@ -159,7 +159,8 @@ fetch("schema.json")
             .onEngineTick(() => {
                 const starGeo = new THREE.BufferGeometry();
                 const starPos = [];
-                for (let i = 0; i < 1000; i++) {
+                const starCount = 200; // Reduced the number of stars from 1000 to 200
+                for (let i = 0; i < starCount; i++) {
                     starPos.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
                 }
                 starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
