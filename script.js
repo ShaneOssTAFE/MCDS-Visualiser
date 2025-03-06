@@ -4,7 +4,7 @@ function generateGraphData(schema) {
     const links = [];
     const nodeMap = new Map();
 
-    // D3 color scale for distinct colors
+    // D3 color scale for distinct colors (loaded via d3.v7.min.js)
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
     // Step 1: Create nodes from "properties"
@@ -26,7 +26,7 @@ function generateGraphData(schema) {
 
     // Step 2: Create nodes from "definitions" (optional, for referenced types)
     Object.keys(schema.definitions).forEach(defKey => {
-        if (!nodeMap.has(defKey + "s") && !defKey.endsWith("ID") && !["partyType", "gender"].includes(defKey)) { // Avoid duplicates and simple types
+        if (!nodeMap.has(defKey + "s") && !defKey.endsWith("ID") && !["partyType", "gender"].includes(defKey)) {
             const def = schema.definitions[defKey];
             const node = {
                 id: defKey,
@@ -37,7 +37,7 @@ function generateGraphData(schema) {
                 color: "#ff6b6b" // Red for definitions
             };
             nodes.push(node);
-            nodeMap.set(defKey, node);
+            nodeMap.set(key, node);
         }
     });
 
@@ -47,14 +47,13 @@ function generateGraphData(schema) {
         if (props) {
             Object.keys(props).forEach(propKey => {
                 const prop = props[propKey];
-                // Handle $ref in properties
                 if (prop["$ref"]) {
                     const refPath = prop["$ref"].split("/").pop();
                     let targetNodeId = refPath;
                     if (refPath.endsWith("ID")) {
-                        targetNodeId = refPath.replace("ID", "s"); // e.g., "personID" -> "persons"
+                        targetNodeId = refPath.replace("ID", "s");
                     } else if (nodeMap.has(refPath + "s")) {
-                        targetNodeId = refPath + "s"; // Pluralize if exists
+                        targetNodeId = refPath + "s";
                     }
                     if (nodeMap.has(targetNodeId)) {
                         links.push({
@@ -64,7 +63,6 @@ function generateGraphData(schema) {
                         });
                     }
                 }
-                // Handle arrays with $ref in items
                 if (prop.type === "array" && prop.items && prop.items["$ref"]) {
                     const refPath = prop.items["$ref"].split("/").pop();
                     let targetNodeId = refPath;
@@ -89,7 +87,7 @@ function generateGraphData(schema) {
 }
 
 // Load your JSON schema and initialize the graph
-fetch("schema.json") // Adjust the path to your JSON file
+fetch("schema.json")
     .then(response => response.json())
     .then(schema => {
         const graphData = generateGraphData(schema);
@@ -98,24 +96,22 @@ fetch("schema.json") // Adjust the path to your JSON file
         const Graph = ForceGraph3D()(document.getElementById("graph"))
             .graphData(graphData)
             .nodeLabel(node => node.label)
-            //.nodeColor(node => node.color) // Assign correct color to nodes
-            //.linkColor(() => "#ffffff") // White edges
-            .linkWidth(2)
-            .nodeAutoColorBy('group')
-            .linkAutoColorBy(d => graphData.nodes[d.source].group)
-            .linkOpacity(0.5)
-            .backgroundColor("#1a1a1a") // Dark background
-            .nodeThreeObject(node => {
-                // Create glowing sphere instead of squares
-                const geometry = new THREE.SphereGeometry(6); // Adjust size
-                const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
-                const sphere = new THREE.Mesh(geometry, material);
-                return sphere;
+            .nodeAutoColorBy('group') // Color nodes by group
+            .linkAutoColorBy(d => {
+                // Safely access the source node's group
+                const sourceNode = typeof d.source === 'object' ? d.source : graphData.nodes.find(n => n.id === d.source);
+                return sourceNode ? sourceNode.group : 'default'; // Fallback if undefined
             })
-            .onNodeClick((node, event) => { // Explicitly capture 'event'
-                if (!event) return; // Prevent errors if event is undefined
-            
-                // Show properties in tooltip
+            .linkWidth(2)
+            .linkOpacity(0.5)
+            .backgroundColor("#1a1a1a")
+            .nodeThreeObject(node => {
+                const geometry = new THREE.SphereGeometry(6);
+                const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
+                return new THREE.Mesh(geometry, material);
+            })
+            .onNodeClick((node, event) => {
+                if (!event) return;
                 const tooltip = document.getElementById("tooltip");
                 tooltip.style.display = "block";
                 tooltip.style.left = `${event.clientX + 10}px`;
@@ -125,8 +121,6 @@ fetch("schema.json") // Adjust the path to your JSON file
                     <em>${node.description}</em><br>
                     ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
                 `;
-            
-                // Zoom to the clicked node
                 Graph.cameraPosition({ z: 300 }, node, 1000);
             })
             .onNodeHover(node => {
@@ -136,8 +130,7 @@ fetch("schema.json") // Adjust the path to your JSON file
                 document.getElementById("tooltip").style.display = "none";
             });
 
-        // Adjust forces for better layout
-        Graph.d3Force("charge").strength(-200); // Repulsion
-        Graph.d3Force("link").distance(100); // Edge length
+        Graph.d3Force("charge").strength(-200);
+        Graph.d3Force("link").distance(100);
     })
     .catch(error => console.error("Error loading JSON:", error));
