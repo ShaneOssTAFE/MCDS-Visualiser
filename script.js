@@ -147,13 +147,6 @@ fetch("schema.json")
                 Graph.scene().children.forEach(obj => {
                     if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
                 });
-
-                // Floating particle effect
-                for (let i = 0; i < particleCount; i++) {
-                    positions[i * 3] += speeds[i]; // Move particles in x-direction
-                    if (positions[i * 3] > 1000) positions[i * 3] = -1000; // Reset when out of bounds
-                }
-                particleGeo.attributes.position.needsUpdate = true;
             })
             .onNodeClick((node, event) => {
                 if (!event) return;
@@ -172,12 +165,18 @@ fetch("schema.json")
             })
             .onBackgroundClick(() => {
                 document.getElementById("tooltip").style.display = "none";
+                // Reset to show all nodes and links
+                filteredData = {
+                    nodes: graphData.nodes,
+                    links: graphData.links
+                };
+                Graph.graphData(filteredData);
             });
 
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
 
-        // Add floating particle background effect
+        // Floating particle effect setup
         const particleCount = 1000;
         const particleGeo = new THREE.BufferGeometry();
         const positions = [];
@@ -195,19 +194,27 @@ fetch("schema.json")
 
         // Search and Filter functionality
         let filteredData = graphData;
-        
-        // Search functionality
-        document.getElementById("search").addEventListener("input", (e) => {
-            const searchTerm = e.target.value.toLowerCase();
+
+        // Handle search input
+        document.getElementById("search").addEventListener("input", function(event) {
+            const searchTerm = event.target.value.toLowerCase();
+            const filteredNodes = graphData.nodes.filter(node => 
+                node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)
+            );
+
+            const filteredLinks = graphData.links.filter(link => {
+                const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                const targetNode = graphData.nodes.find(node => node.id === link.target);
+                return sourceNode && targetNode && (
+                    sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm)
+                );
+            });
+
             filteredData = {
-                nodes: graphData.nodes.filter(node => node.label.toLowerCase().includes(searchTerm)),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm);
-                })
+                nodes: filteredNodes,
+                links: filteredLinks
             };
-            Graph.graphData(filteredData);
+            Graph.graphData(filteredData); // Refresh graph
         });
 
         // Filter Entities
@@ -217,12 +224,12 @@ fetch("schema.json")
                 links: graphData.links.filter(link => {
                     const sourceNode = graphData.nodes.find(node => node.id === link.source);
                     const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.group === 'entity' && targetNode.group === 'entity';
+                    return sourceNode && targetNode && sourceNode.group === 'entity' && targetNode.group === 'entity';
                 })
             };
             Graph.graphData(filteredData);
         });
-
+        
         // Filter Definitions
         document.getElementById("filterDefs").addEventListener("click", () => {
             filteredData = {
@@ -230,10 +237,9 @@ fetch("schema.json")
                 links: graphData.links.filter(link => {
                     const sourceNode = graphData.nodes.find(node => node.id === link.source);
                     const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode.group === 'definition' && targetNode.group === 'definition';
+                    return sourceNode && targetNode && sourceNode.group === 'definition' && targetNode.group === 'definition';
                 })
             };
             Graph.graphData(filteredData);
         });
-    })
-    .catch(error => console.error("Error loading JSON:", error));
+    });
