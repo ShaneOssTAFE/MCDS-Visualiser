@@ -1,10 +1,13 @@
-fetch('schema.json')
-  .then(response => response.json())
-  .then(schema => {
-    const { nodes, links } = processSchema(schema);
-    initGraph(nodes, links);
-  })
-  .catch(error => console.error('Error loading schema:', error));
+// Ensure DOM is loaded before running script
+document.addEventListener('DOMContentLoaded', () => {
+  fetch('schema.json')
+    .then(response => response.json())
+    .then(schema => {
+      const { nodes, links } = processSchema(schema);
+      initGraph(nodes, links);
+    })
+    .catch(error => console.error('Error loading schema:', error));
+});
 
 function processSchema(schema) {
   const nodes = [];
@@ -87,7 +90,7 @@ function initGraph(nodes, links) {
 
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
-    .nodeLabel('') // Disable default label tooltip; use custom tooltip only
+    .nodeLabel('') // Disable default label tooltip
     .nodeAutoColorBy('group')
     .nodeOpacity(0.9)
     .nodeThreeObject(node => {
@@ -135,12 +138,10 @@ function initGraph(nodes, links) {
     })
     .onNodeClick(node => {
       Graph.cameraPosition(
-        { x: node.x, y: node.y, z: node.z + 300 }, // Position camera 300 units from node
+        { x: node.x, y: node.y, z: node.z + 300 }, // Zoom in to node
         node,
         1000
       );
-      // No direct zoom method; use camera distance adjustment
-      Graph.cameraDistance(300, 1000); // Approximate zoom effect
       node.__threeObj.children[0].material.color.set('#FFFFFF');
       setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
     });
@@ -163,10 +164,11 @@ function initGraph(nodes, links) {
       const shouldBeVisible = filterFn(node);
       if (visibilityCache.get(node.id) !== shouldBeVisible) {
         visibilityCache.set(node.id, shouldBeVisible);
-        Graph.nodeVisibility({ id: node.id }, shouldBeVisible);
+        node.visible = shouldBeVisible; // Update node visibility directly
       }
     });
-    Graph.refresh(); // Force re-render after visibility change
+    Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links }); // Update graph data
+    Graph.refresh(); // Force re-render
   }
 
   const searchInput = document.getElementById('search');
