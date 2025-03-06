@@ -4,7 +4,7 @@ function generateGraphData(schema) {
     const links = [];
     const nodeMap = new Map();
 
-    // D3 color scale for distinct colors (loaded via d3.v7.min.js)
+    // D3 color scale for distinct colors
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
     // Step 1: Create nodes from "properties"
@@ -37,7 +37,7 @@ function generateGraphData(schema) {
                 color: "#ff6b6b" // Red for definitions
             };
             nodes.push(node);
-            nodeMap.set(key, node);
+            nodeMap.set(defKey, node); // Fixed: Use 'defKey' instead of 'key'
         }
     });
 
@@ -98,9 +98,8 @@ fetch("schema.json")
             .nodeLabel(node => node.label)
             .nodeAutoColorBy('group') // Color nodes by group
             .linkAutoColorBy(d => {
-                // Safely access the source node's group
                 const sourceNode = typeof d.source === 'object' ? d.source : graphData.nodes.find(n => n.id === d.source);
-                return sourceNode ? sourceNode.group : 'default'; // Fallback if undefined
+                return sourceNode ? sourceNode.group : 'default';
             })
             .linkWidth(2)
             .linkOpacity(0.5)
