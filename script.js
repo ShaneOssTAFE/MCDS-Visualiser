@@ -227,5 +227,15 @@ fetch("schema.json")
             };
             Graph.graphData(filteredData);
         });
+
+        // Add background click event to reset the graph view
+        document.getElementById("graph").addEventListener("click", () => {
+            // Reset the filter and search state to show all nodes and links
+            filteredData = {
+                nodes: graphData.nodes,
+                links: graphData.links
+            };
+            Graph.graphData(filteredData); // Refresh the graph to show all data
+        });
     })
     .catch(error => console.error("Error loading JSON:", error));
