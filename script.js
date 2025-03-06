@@ -171,42 +171,46 @@ fetch("schema.json")
         Graph.d3Force("link").distance(100);
 
         // Search and Filter functionality
+        let filteredData = graphData;
+        
+        // Search functionality
         document.getElementById("search").addEventListener("input", (e) => {
             const searchTerm = e.target.value.toLowerCase();
-            Graph.graphData(graphData);
-            Graph.nodeIdAccessor(node => node.id);
-            Graph.nodeLabel(node => node.label);
-            Graph.nodeAutoColorBy('group');
-            Graph.nodeVisibility(node => node.label.toLowerCase().includes(searchTerm));
+            filteredData = {
+                nodes: graphData.nodes.filter(node => node.label.toLowerCase().includes(searchTerm)),
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm);
+                })
+            };
+            Graph.graphData(filteredData);
         });
 
+        // Filter Entities
         document.getElementById("filterEntities").addEventListener("click", () => {
-            Graph.graphData({
+            filteredData = {
                 nodes: graphData.nodes.filter(node => node.group === 'entity'),
-                links: graphData.links.filter(link => graphData.nodes.find(node => node.id === link.source || node.id === link.target).group === 'entity')
-            });
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.group === 'entity' && targetNode.group === 'entity';
+                })
+            };
+            Graph.graphData(filteredData);
         });
 
+        // Filter Definitions
         document.getElementById("filterDefs").addEventListener("click", () => {
-            Graph.graphData({
+            filteredData = {
                 nodes: graphData.nodes.filter(node => node.group === 'definition'),
-                links: graphData.links.filter(link => graphData.nodes.find(node => node.id === link.source || node.id === link.target).group === 'definition')
-            });
+                links: graphData.links.filter(link => {
+                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
+                    const targetNode = graphData.nodes.find(node => node.id === link.target);
+                    return sourceNode.group === 'definition' && targetNode.group === 'definition';
+                })
+            };
+            Graph.graphData(filteredData);
         });
     })
     .catch(error => console.error("Error loading JSON:", error));
-
-// Add Gradient Background
-const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-document.body.appendChild(canvas);
-
-const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-gradient.addColorStop(0, "#1a1a1a");
-gradient.addColorStop(1, "#000000");
-
-ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-
