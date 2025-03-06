@@ -1,3 +1,4 @@
+// script.js
 fetch('schema.json')
   .then(response => response.json())
   .then(schema => {
@@ -9,67 +10,59 @@ fetch('schema.json')
 function processSchema(schema) {
   const nodes = [];
   const links = [];
-  const nodeMap = new Map(); // More efficient than Set for lookups
+  const seenNodes = new Set();
 
-  // Unified node processing with schema-specific handling
-  const processNode = (id, data, type) => {
-    if (!nodeMap.has(id)) {
-      const title = data.title || id.replace(/([A-Z])/g, ' $1').trim(); // Convert camelCase to title
-      const category = type === 'entity' ? 'Container' : 
-                      id.toLowerCase().includes('id') ? 'Identifier' :
-                      'Component';
-      
-      const node = {
-        id,
-        name: title,
-        type,
-        category,
-        description: data.description || `No description for ${title}`,
-        group: type === 'entity' ? 0 : 1,
-        links: 0
-      };
-      
-      nodes.push(node);
-      nodeMap.set(id, node);
-    }
-  };
+  // Process properties (main entities)
+  Object.entries(schema.properties).forEach(([id, entity]) => {
+    addNode(id, entity, 'entity');
+  });
 
-  // Process schema structure
-  Object.entries(schema.properties).forEach(([id, entity]) => processNode(id, entity, 'entity'));
-  Object.entries(schema.definitions).forEach(([id, def]) => processNode(id, def, 'definition'));
+  // Process definitions
+  Object.entries(schema.definitions).forEach(([id, definition]) => {
+    addNode(id, definition, 'definition');
+  });
 
-  // Enhanced reference detection with array handling
-  const findRefs = (obj, sourceId) => {
-    if (!obj || typeof obj !== 'object') return;
-    
-    // Handle array items first
-    if (Array.isArray(obj)) {
-      obj.forEach(item => findRefs(item, sourceId));
-      return;
-    }
-
-    // Check for direct $ref
-    if (obj.$ref) {
-      const targetId = obj.$ref.replace('#/definitions/', '');
-      if (nodeMap.has(targetId)) {
-        links.push({ source: sourceId, target: targetId });
-        nodeMap.get(sourceId).links++;
-      }
-    }
-
-    // Recursive property check
-    Object.values(obj).forEach(value => {
-      if (typeof value === 'object') findRefs(value, sourceId);
-    });
-  };
-
-  // Process relationships
+  // Create links between nodes
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id] 
+      ? schema.properties[node.id]
       : schema.definitions[node.id];
-    findRefs(schemaNode, node.id);
+
+    traverseProperties(schemaNode, node.id);
   });
+
+  function addNode(id, data, type) {
+    if (!seenNodes.has(id)) {
+      nodes.push({
+        id,
+        name: data.title || id,
+        type,
+        description: data.description || '',
+        group: type === 'entity' ? 0 : 1
+      });
+      seenNodes.add(id);
+    }
+  }
+
+  function traverseProperties(obj, sourceId) {
+    if (!obj || typeof obj !== 'object') return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (key === '$ref') {
+        const targetId = value.replace('#/definitions/', '');
+        if (seenNodes.has(targetId)) {
+          links.push({ source: sourceId, target: targetId });
+        }
+      }
+      else if (value && typeof value === 'object') {
+        if (Array.isArray(value)) {
+          value.forEach(item => traverseProperties(item, sourceId));
+        } else {
+          traverseProperties(value, sourceId);
+        }
+      }
+    });
+  }
 
   return { nodes, links };
 }
@@ -85,12 +78,10 @@ function initGraph(nodes, links) {
     .nodeAutoColorBy('group')
     .nodeResolution(16)
     .nodeOpacity(0.9)
-    .linkWidth(2)  // Increased visibility
-    .linkDirectionalArrowLength(6)  // Arrow size
+    .linkWidth(0.5)
+    .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
-    .linkCurvature(0.25)  // Curved links
-    .linkDirectionalParticles(2)  // Flow indication
-    .linkDirectionalParticleSpeed(0.005)
+    .linkCurvature(0.25)
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
@@ -100,75 +91,40 @@ function initGraph(nodes, links) {
           <em>Type:</em> ${node.type}<br/>
           <em>Description:</em> ${node.description || 'N/A'}
         `;
-        tooltip.style.left = `${event.pageX + 10}px`;
-        tooltip.style.top = `${event.pageY + 10}px`;
       }
     })
     .onNodeClick(node => {
-      // Zoom with animation
-      Graph.zoomToFit(1000, 200, node => node.id === node.id);
-    })
-    // Physics configuration
-    .d3Force('link', d3.forceLink().id(d => d.id).distance(150))
-    .d3Force('charge', d3.forceManyBody().strength(-1000));
+      Graph.centerAt(node.x, node.y, node.z, 1000);
+      Graph.zoom(2, 2000);
+    });
 
-  // Working search
-  document.getElementById('search').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
+  // Search functionality
+  document.getElementById('search').addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
     Graph.nodeVisibility(node => 
-      node.name.toLowerCase().includes(searchTerm) || 
-      node.description.toLowerCase().includes(searchTerm)
+      node.name.toLowerCase().includes(term)
     );
   });
 
-  // Working filter buttons
+  // Filter controls
   document.getElementById('filterEntities').addEventListener('click', () => {
     Graph.nodeVisibility(node => node.type === 'entity');
-    Graph.linkVisibility(link => 
-      nodes.find(n => n.id === link.source.id)?.type === 'entity' &&
-      nodes.find(n => n.id === link.target.id)?.type === 'entity'
-    );
   });
 
   document.getElementById('filterDefs').addEventListener('click', () => {
     Graph.nodeVisibility(node => node.type === 'definition');
-    Graph.linkVisibility(link => 
-      nodes.find(n => n.id === link.source.id)?.type === 'definition' &&
-      nodes.find(n => n.id === link.target.id)?.type === 'definition'
-    );
   });
 
   // Camera controls
   let isDragging = false;
-  let currentRotation = { x: 0, y: 0 };
-  
-  window.addEventListener('mousedown', () => {
-    isDragging = true;
-    currentRotation = Graph.cameraRotation();
-  });
-  
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-  
-  window.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousedown', () => isDragging = true);
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
     if (!isDragging) return;
-    
-    const deltaX = e.movementX;
-    const deltaY = e.movementY;
-    
-    Graph.cameraRotation({
-      x: currentRotation.x + deltaX * 0.005,
-      y: currentRotation.y + deltaY * 0.005
+    Graph.cameraPosition({
+      x: Graph.cameraPosition().x + e.movementX * 2,
+      y: Graph.cameraPosition().y - e.movementY * 2
     });
-  });
-
-  // Zoom controls
-  window.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const zoomIntensity = 0.1;
-    const newZoom = Graph.zoom() + (e.deltaY < 0 ? zoomIntensity : -zoomIntensity);
-    Graph.zoom(Math.min(Math.max(newZoom, 0.1), 5));
   });
 
   // Responsive handling
@@ -176,9 +132,4 @@ function initGraph(nodes, links) {
     Graph.width(window.innerWidth);
     Graph.height(window.innerHeight);
   });
-
-  // Initial animation
-  setTimeout(() => {
-    Graph.zoomToFit(2000, 200);
-  }, 500);
 }
