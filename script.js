@@ -98,9 +98,12 @@ fetch("schema.json") // Adjust the path to your JSON file
         const Graph = ForceGraph3D()(document.getElementById("graph"))
             .graphData(graphData)
             .nodeLabel(node => node.label)
-            .nodeColor(node => node.color) // Assign correct color to nodes
-            .linkColor(() => "#ffffff") // White edges
+            //.nodeColor(node => node.color) // Assign correct color to nodes
+            //.linkColor(() => "#ffffff") // White edges
             .linkWidth(2)
+            .nodeAutoColorBy('group')
+            .linkAutoColorBy(d => graphData.nodes[d.source].group)
+            .linkOpacity(0.5)
             .backgroundColor("#1a1a1a") // Dark background
             .nodeThreeObject(node => {
                 // Create glowing sphere instead of squares
