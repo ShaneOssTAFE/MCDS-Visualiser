@@ -3,15 +3,16 @@ fetch('schema.json')
   .then(schema => {
     const { nodes, links } = processSchema(schema);
     initGraph(nodes, links);
+    generateStats(nodes, links);
   })
   .catch(error => console.error('Error loading schema:', error));
 
 function processSchema(schema) {
   const nodes = [];
   const links = [];
-  const seenNodes = new Set();
+  const nodeMap = new Map();
 
-  // Process properties (main entities)
+  // Process main entities
   Object.entries(schema.properties).forEach(([id, entity]) => {
     addNode(id, entity, 'entity');
   });
@@ -21,44 +22,53 @@ function processSchema(schema) {
     addNode(id, definition, 'definition');
   });
 
-  // Create links between nodes
+  // Create relationships
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id]
+      ? schema.properties[node.id] 
       : schema.definitions[node.id];
-
-    traverseProperties(schemaNode, node.id);
+    
+    traverseSchema(schemaNode, node.id);
   });
 
   function addNode(id, data, type) {
-    if (!seenNodes.has(id)) {
-      nodes.push({
+    if (!nodeMap.has(id)) {
+      const newNode = {
         id,
         name: data.title || id,
         type,
         description: data.description || '',
-        group: type === 'entity' ? 0 : 1
-      });
-      seenNodes.add(id);
+        group: type === 'entity' ? 0 : 1,
+        links: 0
+      };
+      nodes.push(newNode);
+      nodeMap.set(id, newNode);
     }
   }
 
-  function traverseProperties(obj, sourceId) {
+  function traverseSchema(obj, sourceId) {
     if (!obj || typeof obj !== 'object') return;
 
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      obj.forEach(item => traverseSchema(item, sourceId));
+      return;
+    }
+
+    // Process object properties
     Object.entries(obj).forEach(([key, value]) => {
       if (key === '$ref') {
         const targetId = value.replace('#/definitions/', '');
-        if (seenNodes.has(targetId)) {
-          links.push({ source: sourceId, target: targetId });
+        if (nodeMap.has(targetId)) {
+          links.push({
+            source: sourceId,
+            target: targetId,
+            value: 3
+          });
+          nodeMap.get(sourceId).links++;
         }
-      }
-      else if (value && typeof value === 'object') {
-        if (Array.isArray(value)) {
-          value.forEach(item => traverseProperties(item, sourceId));
-        } else {
-          traverseProperties(value, sourceId);
-        }
+      } else {
+        traverseSchema(value, sourceId);
       }
     });
   }
@@ -70,38 +80,41 @@ function initGraph(nodes, links) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
     .nodeLabel(node => `
-      <strong>${node.name}</strong><br/>
-      <em>${node.type}</em><br/>
-      ${node.description || ''}
+      <strong>${node.name}</strong><br>
+      <em>${node.type}</em><br>
+      ${node.description || 'No description'}
     `)
     .nodeAutoColorBy('group')
-    .nodeResolution(16)
-    .nodeOpacity(0.9)
-    .linkWidth(0.5)
-    .linkDirectionalArrowLength(4)
+    .nodeValence(node => node.links * 2)
+    .linkDirectionalArrowLength(5)
     .linkDirectionalArrowRelPos(1)
-    .linkCurvature(0.25)
+    .linkCurvature(0.2)
+    .linkWidth(0.8)
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
-      if (node) {
-        tooltip.innerHTML = `
-          <strong>${node.name}</strong><br/>
-          <em>Type:</em> ${node.type}<br/>
-          <em>Description:</em> ${node.description || 'N/A'}
-        `;
-      }
+      tooltip.innerHTML = node ? `
+        <strong>${node.name}</strong><br>
+        <em>Type:</em> ${node.type}<br>
+        <em>Connections:</em> ${node.links}<br>
+        ${node.description || ''}
+      ` : '';
     })
     .onNodeClick(node => {
       Graph.centerAt(node.x, node.y, node.z, 1000);
-      Graph.zoom(2, 2000);
+      Graph.zoom(4, 2000);
     });
+
+  // Configure physics
+  Graph.d3Force('charge').strength(-120)
+    .d3Force('link').distance(150);
 
   // Search functionality
   document.getElementById('search').addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
     Graph.nodeVisibility(node => 
-      node.name.toLowerCase().includes(term)
+      node.name.toLowerCase().includes(term) ||
+      node.description.toLowerCase().includes(term)
     );
   });
 
@@ -131,4 +144,28 @@ function initGraph(nodes, links) {
     Graph.width(window.innerWidth);
     Graph.height(window.innerHeight);
   });
+
+  return Graph;
+}
+
+function generateStats(nodes, links) {
+  const stats = {
+    totalNodes: nodes.length,
+    totalLinks: links.length,
+    entities: nodes.filter(n => n.type === 'entity').length,
+    definitions: nodes.filter(n => n.type === 'definition').length,
+    avgConnections: (links.length / nodes.length).toFixed(2),
+    mostConnected: nodes.reduce((max, node) => node.links > max.links ? node : max, { links: 0 })
+  };
+
+  const statsDiv = document.createElement('div');
+  statsDiv.className = 'stats';
+  statsDiv.innerHTML = `
+    <h3>Schema Statistics</h3>
+    <p>Nodes: ${stats.totalNodes} (${stats.entities} entities, ${stats.definitions} definitions)</p>
+    <p>Relationships: ${stats.totalLinks}</p>
+    <p>Average connections: ${stats.avgConnections}</p>
+    <p>Most connected: ${stats.mostConnected.name} (${stats.mostConnected.links} links)</p>
+  `;
+  document.body.appendChild(statsDiv);
 }
