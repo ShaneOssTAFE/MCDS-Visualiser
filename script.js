@@ -104,32 +104,99 @@ fetch("schema.json")
             .linkWidth(2)
             .linkOpacity(0.5)
             .backgroundColor("#1a1a1a")
+            
+            // Add Particle Effects to Nodes
             .nodeThreeObject(node => {
+                const group = new THREE.Group();
+                
+                // Main sphere (node)
                 const geometry = new THREE.SphereGeometry(6);
                 const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
-                return new THREE.Mesh(geometry, material);
+                const sphere = new THREE.Mesh(geometry, material);
+                group.add(sphere);
+                
+                // Particle halo
+                const particleGeo = new THREE.BufferGeometry();
+                const positions = [];
+                for (let i = 0; i < 50; i++) {
+                    const theta = Math.random() * 2 * Math.PI;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const r = 8 + Math.random() * 2;
+                    positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                }
+                particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                const particleMat = new THREE.PointsMaterial({ color: node.color, size: 2, transparent: true, opacity: 0.5 });
+                const particles = new THREE.Points(particleGeo, particleMat);
+                group.add(particles);
+                
+                return group;
             })
-            .onNodeClick((node, event) => {
-                if (!event) return;
-                const tooltip = document.getElementById("tooltip");
-                tooltip.style.display = "block";
-                tooltip.style.left = `${event.clientX + 10}px`;
-                tooltip.style.top = `${event.clientY + 10}px`;
-                tooltip.innerHTML = `
-                    <strong>${node.label}</strong><br>
-                    <em>${node.description}</em><br>
-                    ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
-                `;
-                Graph.cameraPosition({ z: 300 }, node, 1000);
+            
+            // Add Animated Links (Dashed Links)
+            .linkThreeObject(link => {
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(1, 0, 0)
+                ]);
+                const material = new THREE.LineDashedMaterial({
+                    color: link.source.group === 'entity' ? '#00d1b2' : '#ff6b6b',
+                    dashSize: 5,
+                    gapSize: 3,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const line = new THREE.Line(geometry, material);
+                line.computeLineDistances();
+                return line;
             })
-            .onNodeHover(node => {
-                document.body.style.cursor = node ? "pointer" : "default";
+            .onEngineTick(() => {
+                Graph.scene().children.forEach(obj => {
+                    if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
+                });
             })
-            .onBackgroundClick(() => {
-                document.getElementById("tooltip").style.display = "none";
+            
+            // Add Starry Background
+            .onEngineTick(() => {
+                const starGeo = new THREE.BufferGeometry();
+                const starPos = [];
+                for (let i = 0; i < 1000; i++) {
+                    starPos.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
+                }
+                starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+                const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
+                const stars = new THREE.Points(starGeo, starMat);
+                Graph.scene().add(stars);
             });
 
+        // Handle Node Hover and Click Events
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
+
+        // Search and Filter Logic
+        document.getElementById('search').addEventListener('input', function(event) {
+            const searchTerm = event.target.value.toLowerCase();
+            graphData.nodes.forEach(node => {
+                if (node.label.toLowerCase().includes(searchTerm)) {
+                    node.visible = true;
+                } else {
+                    node.visible = false;
+                }
+            });
+            Graph.graphData(graphData);
+        });
+
+        document.getElementById('filterEntities').addEventListener('click', function() {
+            graphData.nodes.forEach(node => {
+                node.visible = node.group === 'entity';
+            });
+            Graph.graphData(graphData);
+        });
+
+        document.getElementById('filterDefs').addEventListener('click', function() {
+            graphData.nodes.forEach(node => {
+                node.visible = node.group === 'definition';
+            });
+            Graph.graphData(graphData);
+        });
     })
     .catch(error => console.error("Error loading JSON:", error));
