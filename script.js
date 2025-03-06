@@ -180,25 +180,31 @@ function initGraph(nodes, links, schema) {
          .linkColor(l => l.highlighted ? '#FFFF00' : '#FFFFFF');
   });
 
+  let lastClickTime = 0;
+  const doubleClickThreshold = 300; // milliseconds
   Graph.onNodeClick(node => {
-    Graph.cameraPosition(
-      { x: node.x, y: node.y, z: node.z + 300 },
-      node,
-      1000
-    );
-  });
-
-  Graph.onNodeDoubleClick(node => {
-    const clusterNodes = nodes.filter(n => n.cluster === node.cluster && n.visible !== false);
-    const center = clusterNodes.reduce((acc, n) => ({ x: acc.x + n.x, y: acc.y + n.y, z: acc.z + n.z }), { x: 0, y: 0, z: 0 });
-    center.x /= clusterNodes.length;
-    center.y /= clusterNodes.length;
-    center.z /= clusterNodes.length;
-    Graph.cameraPosition(
-      { x: center.x, y: center.y, z: center.z + 300 },
-      center,
-      1000
-    );
+    const currentTime = Date.now();
+    if (currentTime - lastClickTime < doubleClickThreshold) {
+      // Double-click detected
+      const clusterNodes = nodes.filter(n => n.cluster === node.cluster && n.visible !== false);
+      const center = clusterNodes.reduce((acc, n) => ({ x: acc.x + n.x, y: acc.y + n.y, z: acc.z + n.z }), { x: 0, y: 0, z: 0 });
+      center.x /= clusterNodes.length;
+      center.y /= clusterNodes.length;
+      center.z /= clusterNodes.length;
+      Graph.cameraPosition(
+        { x: center.x, y: center.y, z: center.z + 300 },
+        center,
+        1000
+      );
+    } else {
+      // Single-click
+      Graph.cameraPosition(
+        { x: node.x, y: node.y, z: node.z + 300 },
+        node,
+        1000
+      );
+    }
+    lastClickTime = currentTime;
   });
 
   let visibilityCache = new Map();
