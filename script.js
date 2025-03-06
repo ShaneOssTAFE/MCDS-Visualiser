@@ -1,72 +1,3 @@
-// script.js
-fetch('schema.json')
-  .then(response => response.json())
-  .then(schema => {
-    const { nodes, links } = processSchema(schema);
-    initGraph(nodes, links);
-  })
-  .catch(error => console.error('Error loading schema:', error));
-
-function processSchema(schema) {
-  const nodes = [];
-  const links = [];
-  const seenNodes = new Set();
-
-  // Process properties (main entities)
-  Object.entries(schema.properties).forEach(([id, entity]) => {
-    addNode(id, entity, 'entity');
-  });
-
-  // Process definitions
-  Object.entries(schema.definitions).forEach(([id, definition]) => {
-    addNode(id, definition, 'definition');
-  });
-
-  // Create links between nodes
-  nodes.forEach(node => {
-    const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id]
-      : schema.definitions[node.id];
-
-    traverseProperties(schemaNode, node.id);
-  });
-
-  function addNode(id, data, type) {
-    if (!seenNodes.has(id)) {
-      nodes.push({
-        id,
-        name: data.title || id,
-        type,
-        description: data.description || '',
-        group: type === 'entity' ? 0 : 1
-      });
-      seenNodes.add(id);
-    }
-  }
-
-  function traverseProperties(obj, sourceId) {
-    if (!obj || typeof obj !== 'object') return;
-
-    Object.entries(obj).forEach(([key, value]) => {
-      if (key === '$ref') {
-        const targetId = value.replace('#/definitions/', '');
-        if (seenNodes.has(targetId)) {
-          links.push({ source: sourceId, target: targetId });
-        }
-      }
-      else if (value && typeof value === 'object') {
-        if (Array.isArray(value)) {
-          value.forEach(item => traverseProperties(item, sourceId));
-        } else {
-          traverseProperties(value, sourceId);
-        }
-      }
-    });
-  }
-
-  return { nodes, links };
-}
-
 function initGraph(nodes, links) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
@@ -78,10 +9,12 @@ function initGraph(nodes, links) {
     .nodeAutoColorBy('group')
     .nodeResolution(16)
     .nodeOpacity(0.9)
-    .linkWidth(0.5)
-    .linkDirectionalArrowLength(4)
+    .linkWidth(2)  // Increased visibility
+    .linkDirectionalArrowLength(6)  // Arrow size
     .linkDirectionalArrowRelPos(1)
-    .linkCurvature(0.25)
+    .linkCurvature(0.25)  // Curved links
+    .linkDirectionalParticles(2)  // Flow indication
+    .linkDirectionalParticleSpeed(0.005)
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
@@ -91,45 +24,75 @@ function initGraph(nodes, links) {
           <em>Type:</em> ${node.type}<br/>
           <em>Description:</em> ${node.description || 'N/A'}
         `;
+        tooltip.style.left = `${event.pageX + 10}px`;
+        tooltip.style.top = `${event.pageY + 10}px`;
       }
     })
     .onNodeClick(node => {
-      Graph.centerAt(node.x, node.y, node.z, 1000);
-      Graph.zoom(2, 2000);
-    });
+      // Zoom with animation
+      Graph.zoomToFit(1000, 200, node => node.id === node.id);
+    })
+    // Physics configuration
+    .d3Force('link', d3.forceLink().id(d => d.id).distance(150))
+    .d3Force('charge', d3.forceManyBody().strength(-1000));
 
-    // Physics optimization for educational schema
-  Graph.d3Force('charge').strength(-100)
-       .d3Force('link').distance(150)
-       .d3Force('center').strength(0.05);
-
-  // Search functionality
-  document.getElementById('search').addEventListener('input', e => {
-    const term = e.target.value.toLowerCase();
+  // Working search
+  document.getElementById('search').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
     Graph.nodeVisibility(node => 
-      node.name.toLowerCase().includes(term)
+      node.name.toLowerCase().includes(searchTerm) || 
+      node.description.toLowerCase().includes(searchTerm)
     );
   });
 
-  // Filter controls
+  // Working filter buttons
   document.getElementById('filterEntities').addEventListener('click', () => {
     Graph.nodeVisibility(node => node.type === 'entity');
+    Graph.linkVisibility(link => 
+      nodes.find(n => n.id === link.source.id)?.type === 'entity' &&
+      nodes.find(n => n.id === link.target.id)?.type === 'entity'
+    );
   });
 
   document.getElementById('filterDefs').addEventListener('click', () => {
     Graph.nodeVisibility(node => node.type === 'definition');
+    Graph.linkVisibility(link => 
+      nodes.find(n => n.id === link.source.id)?.type === 'definition' &&
+      nodes.find(n => n.id === link.target.id)?.type === 'definition'
+    );
   });
 
   // Camera controls
   let isDragging = false;
-  window.addEventListener('mousedown', () => isDragging = true);
-  window.addEventListener('mouseup', () => isDragging = false);
-  window.addEventListener('mousemove', e => {
+  let currentRotation = { x: 0, y: 0 };
+  
+  window.addEventListener('mousedown', () => {
+    isDragging = true;
+    currentRotation = Graph.cameraRotation();
+  });
+  
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+  
+  window.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-    Graph.cameraPosition({
-      x: Graph.cameraPosition().x + e.movementX * 2,
-      y: Graph.cameraPosition().y - e.movementY * 2
+    
+    const deltaX = e.movementX;
+    const deltaY = e.movementY;
+    
+    Graph.cameraRotation({
+      x: currentRotation.x + deltaX * 0.005,
+      y: currentRotation.y + deltaY * 0.005
     });
+  });
+
+  // Zoom controls
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    const newZoom = Graph.zoom() + (e.deltaY < 0 ? zoomIntensity : -zoomIntensity);
+    Graph.zoom(Math.min(Math.max(newZoom, 0.1), 5));
   });
 
   // Responsive handling
@@ -137,4 +100,9 @@ function initGraph(nodes, links) {
     Graph.width(window.innerWidth);
     Graph.height(window.innerHeight);
   });
+
+  // Initial animation
+  setTimeout(() => {
+    Graph.zoomToFit(2000, 200);
+  }, 500);
 }
