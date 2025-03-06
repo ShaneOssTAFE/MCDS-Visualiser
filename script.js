@@ -1,3 +1,13 @@
+// Function to generate unique colors for node groups
+function getColorForGroup(group) {
+    const colors = [
+        "#ff6b6b", "#ffb86c", "#fffa65", "#8aff8a", "#8ab4ff",
+        "#d29cff", "#ff8ad2", "#6bd8ff", "#5eff5e", "#ffa07a"
+    ];
+    const hash = [...group].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+}
+
 // Function to parse the JSON schema and generate graph data
 function generateGraphData(schema) {
     const nodes = [];
@@ -9,9 +19,10 @@ function generateGraphData(schema) {
         const node = {
             id: key,
             label: prop.title || key,
-            group: "entity",
+            group: prop.type || "default", // Use type to categorize
             description: prop.description || "",
-            properties: {}
+            properties: {},
+            color: getColorForGroup(prop.type || "default")
         };
 
         if (prop.items && prop.items.$ref) {
@@ -54,13 +65,17 @@ fetch("schema.json")
             .linkColor(() => "#ffffff")
             .linkWidth(2)
             .backgroundColor("#1a1a1a")
+            .nodeColor(node => node.color) // Apply color to each node
             .nodeThreeObject(node => {
                 // Create text sprite instead of default spheres
                 const sprite = new THREE.Sprite();
                 const canvas = document.createElement("canvas");
                 const ctx = canvas.getContext("2d");
+
+                canvas.width = 256;
+                canvas.height = 64;
                 ctx.font = "Bold 24px Arial";
-                ctx.fillStyle = "#00d1b2";
+                ctx.fillStyle = node.color;
                 ctx.textAlign = "center";
                 ctx.fillText(node.label, canvas.width / 2, canvas.height / 2);
 
@@ -71,9 +86,9 @@ fetch("schema.json")
 
                 return sprite;
             })
-            .onNodeHover(node => {
+            .onNodeHover((node, event) => {
                 const tooltip = document.getElementById("tooltip");
-                if (node) {
+                if (node && event) {
                     tooltip.style.display = "block";
                     tooltip.style.left = `${event.clientX + 10}px`;
                     tooltip.style.top = `${event.clientY + 10}px`;
