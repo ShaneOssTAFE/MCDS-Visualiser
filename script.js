@@ -1,9 +1,9 @@
+// Function to parse the JSON schema and generate graph data
 function generateGraphData(schema) {
     const nodes = [];
     const links = [];
     const nodeMap = new Map();
 
-    // Process top-level properties
     Object.keys(schema.properties).forEach(key => {
         const prop = schema.properties[key];
         const node = {
@@ -25,7 +25,6 @@ function generateGraphData(schema) {
         nodeMap.set(key, node);
     });
 
-    // Process relationships from definitions
     nodes.forEach(node => {
         Object.entries(node.properties).forEach(([propKey, prop]) => {
             if (prop.$ref) {
@@ -44,42 +43,46 @@ function generateGraphData(schema) {
     return { nodes, links };
 }
 
-// Load schema from schema.json and initialize the graph
+// Load schema and initialize graph
 fetch("schema.json")
     .then(response => response.json())
     .then(schema => {
         const graphData = generateGraphData(schema);
         const Graph = ForceGraph3D()(document.getElementById("graph"))
             .graphData(graphData)
-            .nodeLabel(node => node.label)
-            .nodeColor(() => "#00d1b2")
+            .nodeLabel(node => node.label) // Label nodes with text
             .linkColor(() => "#ffffff")
             .linkWidth(2)
             .backgroundColor("#1a1a1a")
             .nodeThreeObject(node => {
-                const spriteMaterial = new THREE.SpriteMaterial({
-                    color: "#00d1b2",
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const sprite = new THREE.Sprite(spriteMaterial);
-                sprite.scale.set(20, 20, 20);
+                // Create text sprite instead of default spheres
+                const sprite = new THREE.Sprite();
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                ctx.font = "Bold 24px Arial";
+                ctx.fillStyle = "#00d1b2";
+                ctx.textAlign = "center";
+                ctx.fillText(node.label, canvas.width / 2, canvas.height / 2);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                sprite.material = material;
+                sprite.scale.set(50, 25, 1); // Adjust size
+
                 return sprite;
             })
-            .onNodeClick(node => {
-                const tooltip = document.getElementById("tooltip");
-                tooltip.style.display = "block";
-                tooltip.style.left = `${event.clientX + 10}px`;
-                tooltip.style.top = `${event.clientY + 10}px`;
-                tooltip.innerHTML = `
-                    <strong>${node.label}</strong><br>
-                    <em>${node.description}</em><br>
-                    ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
-                `;
-                Graph.cameraPosition({ z: 300 }, node, 1000);
-            })
             .onNodeHover(node => {
-                document.body.style.cursor = node ? "pointer" : "default";
+                const tooltip = document.getElementById("tooltip");
+                if (node) {
+                    tooltip.style.display = "block";
+                    tooltip.style.left = `${event.clientX + 10}px`;
+                    tooltip.style.top = `${event.clientY + 10}px`;
+                    tooltip.innerHTML = `<strong>${node.label}</strong><br><em>${node.description}</em>`;
+                    document.body.style.cursor = "pointer";
+                } else {
+                    tooltip.style.display = "none";
+                    document.body.style.cursor = "default";
+                }
             })
             .onBackgroundClick(() => {
                 document.getElementById("tooltip").style.display = "none";
