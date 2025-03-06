@@ -62,7 +62,6 @@ function processSchema(schema) {
 }
 
 function initGraph(nodes, links) {
-  // Precompute shared geometry and materials
   const sphereGeometry = new THREE.SphereGeometry(1, 8, 8);
   const entityMaterial = new THREE.MeshBasicMaterial({ color: '#00FFFF', transparent: true, opacity: 0.9 });
   const defMaterial = new THREE.MeshBasicMaterial({ color: '#FF00FF', transparent: true, opacity: 0.9 });
@@ -80,7 +79,6 @@ function initGraph(nodes, links) {
   const entityParticleMat = new THREE.PointsMaterial({ color: '#00FFFF', size: 1.5, transparent: true, opacity: 0.5 });
   const defParticleMat = new THREE.PointsMaterial({ color: '#FF00FF', size: 1.5, transparent: true, opacity: 0.5 });
 
-  // Track mouse position globally
   let mouseX = 0, mouseY = 0;
   window.addEventListener('mousemove', e => {
     mouseX = e.clientX;
@@ -89,11 +87,7 @@ function initGraph(nodes, links) {
 
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
-    .nodeLabel(node => `
-      <strong>${node.name}</strong><br/>
-      <em>${node.type}</em><br/>
-      ${node.description || ''}
-    `)
+    .nodeLabel('') // Disable default label tooltip; use custom tooltip only
     .nodeAutoColorBy('group')
     .nodeOpacity(0.9)
     .nodeThreeObject(node => {
@@ -130,7 +124,7 @@ function initGraph(nodes, links) {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
       if (node) {
-        tooltip.style.left = `${mouseX + 10}px`; // Use global mouse coordinates
+        tooltip.style.left = `${mouseX + 10}px`;
         tooltip.style.top = `${mouseY + 10}px`;
         tooltip.innerHTML = `
           <strong>${node.name}</strong><br/>
@@ -140,8 +134,13 @@ function initGraph(nodes, links) {
       }
     })
     .onNodeClick(node => {
-      Graph.centerAt(node.x, node.y, node.z, 1000);
-      Graph.zoom(2, 2000);
+      Graph.cameraPosition(
+        { x: node.x, y: node.y, z: node.z + 300 }, // Position camera 300 units from node
+        node,
+        1000
+      );
+      // No direct zoom method; use camera distance adjustment
+      Graph.cameraDistance(300, 1000); // Approximate zoom effect
       node.__threeObj.children[0].material.color.set('#FFFFFF');
       setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
     });
@@ -167,26 +166,31 @@ function initGraph(nodes, links) {
         Graph.nodeVisibility({ id: node.id }, shouldBeVisible);
       }
     });
+    Graph.refresh(); // Force re-render after visibility change
   }
 
-  document.getElementById('search').addEventListener('input', e => {
+  const searchInput = document.getElementById('search');
+  searchInput.addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
     updateVisibility(node => node.name.toLowerCase().includes(term));
   });
 
-  document.getElementById('filterEntities').addEventListener('click', () => {
+  const filterEntitiesBtn = document.getElementById('filterEntities');
+  filterEntitiesBtn.addEventListener('click', () => {
     updateVisibility(node => node.type === 'entity');
   });
 
-  document.getElementById('filterDefs').addEventListener('click', () => {
+  const filterDefsBtn = document.getElementById('filterDefs');
+  filterDefsBtn.addEventListener('click', () => {
     updateVisibility(node => node.type === 'definition');
   });
 
-  document.getElementById('resetView').addEventListener('click', () => {
+  const resetViewBtn = document.getElementById('resetView');
+  resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
     updateVisibility(() => true);
-    document.getElementById('search').value = '';
+    searchInput.value = '';
   });
 
   let isDragging = false;
@@ -204,8 +208,9 @@ function initGraph(nodes, links) {
     previousMousePosition = { x: e.clientX, y: e.clientY };
   });
   window.addEventListener('wheel', e => {
-    const zoom = Graph.zoom() * (e.deltaY > 0 ? 0.9 : 1.1);
-    Graph.zoom(Math.max(0.5, Math.min(5, zoom)), 200);
+    const currentDistance = Graph.cameraDistance();
+    const newDistance = currentDistance * (e.deltaY > 0 ? 1.1 : 0.9);
+    Graph.cameraDistance(Math.max(200, Math.min(2000, newDistance)), 200);
   });
 
   window.addEventListener('resize', () => {
