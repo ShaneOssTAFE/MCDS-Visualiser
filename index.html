@@ -12,37 +12,53 @@
             padding: 10px 15px; 
             border-radius: 5px; 
             display: none; 
-            box-shadow: 0 0 10px rgba(0, 209, 178, 0.5); 
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5); 
             z-index: 10; 
+            color: #fff; 
+            font-size: 16px; 
         }
         #controls { 
             position: absolute; 
             top: 10px; 
             left: 10px; 
             z-index: 10; 
-            background: rgba(0, 0, 0, 0.7); 
-            padding: 10px; 
-            border-radius: 5px; 
+            background: rgba(0, 0, 0, 0.8); 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2); 
         }
         #controls input, #controls button { 
             margin: 5px; 
-            padding: 5px 10px; 
+            padding: 8px 12px; 
             background: #333; 
             color: #fff; 
-            border: none; 
-            border-radius: 3px; 
+            border: 2px solid #fff; 
+            border-radius: 4px; 
+            font-size: 16px; 
+            cursor: pointer; 
         }
-        #controls button:hover { background: #00d1b2; }
+        #controls input:focus, #controls button:focus { 
+            outline: 3px solid #00FFFF; 
+            outline-offset: 2px; 
+        }
+        #controls button:hover, #controls button:focus { 
+            background: #00FFFF; 
+            color: #000; 
+        }
+        #controls input { 
+            background: #222; 
+            width: 200px; 
+        }
     </style>
 </head>
 <body>
     <div id="graph"></div>
-    <div id="tooltip"></div>
-    <div id="controls">
-        <input id="search" type="text" placeholder="Search nodes...">
-        <button id="filterEntities">Entities</button>
-        <button id="filterDefs">Definitions</button>
-        <button id="resetView">Reset View</button>
+    <div id="tooltip" role="tooltip" aria-live="polite"></div>
+    <div id="controls" role="region" aria-label="Graph Controls">
+        <input id="search" type="text" placeholder="Search nodes..." aria-label="Search nodes">
+        <button id="filterEntities" aria-label="Filter to show only entities">Entities</button>
+        <button id="filterDefs" aria-label="Filter to show only definitions">Definitions</button>
+        <button id="resetView" aria-label="Reset graph view">Reset View</button>
     </div>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
