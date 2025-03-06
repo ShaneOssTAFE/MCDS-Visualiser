@@ -6,20 +6,22 @@
     <style>
         body { margin: 0; background: #1a1a1a; color: #fff; font-family: 'Overpass', sans-serif; }
         #graph { width: 100vw; height: 100vh; }
-        .tooltip { position: absolute; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 5px; display: none; }
-        .search-container { position: absolute; top: 10px; left: 10px; z-index: 1; }
-        input[type="text"], button { padding: 5px; background: #333; color: #fff; border: none; margin: 5px; }
-        button { cursor: pointer; }
+        .tooltip { position: absolute; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 5px; display: none; color: #fff; }
+        .controls { position: absolute; top: 10px; left: 10px; z-index: 1; }
+        .controls input, .controls button { padding: 5px; margin-right: 5px; background: #333; color: #fff; border: none; }
     </style>
 </head>
 <body>
-    <div class="search-container">
+    <div id="graph"></div>
+    <div id="tooltip" class="tooltip"></div>
+
+    <!-- Search and Filter controls -->
+    <div class="controls">
         <input id="search" type="text" placeholder="Search nodes...">
         <button id="filterEntities">Entities</button>
         <button id="filterDefs">Definitions</button>
     </div>
-    <div id="graph"></div>
-    <div id="tooltip" class="tooltip"></div>
+
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
