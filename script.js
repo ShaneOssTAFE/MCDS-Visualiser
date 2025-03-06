@@ -237,3 +237,39 @@ fetch("schema.json")
         });
     })
     .catch(error => console.error("Error loading JSON:", error));
+
+// Handle search input
+document.getElementById("search").addEventListener("input", function(event) {
+    const searchTerm = event.target.value.toLowerCase();
+    graphData.nodes.forEach(node => {
+        if (node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)) {
+            node.visible = true; // Make visible if it matches
+        } else {
+            node.visible = false; // Hide if it doesn't match
+        }
+    });
+    Graph.graphData(graphData); // Refresh graph
+});
+
+// Filter nodes by group: Entities or Definitions
+document.getElementById("filterEntities").addEventListener("click", function() {
+    graphData.nodes.forEach(node => {
+        if (node.group === 'entity') {
+            node.visible = true; // Show entities
+        } else {
+            node.visible = false; // Hide non-entities
+        }
+    });
+    Graph.graphData(graphData); // Refresh graph
+});
+
+document.getElementById("filterDefs").addEventListener("click", function() {
+    graphData.nodes.forEach(node => {
+        if (node.group === 'definition') {
+            node.visible = true; // Show definitions
+        } else {
+            node.visible = false; // Hide non-definitions
+        }
+    });
+    Graph.graphData(graphData); // Refresh graph
+});
