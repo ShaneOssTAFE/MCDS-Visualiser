@@ -62,6 +62,24 @@ function processSchema(schema) {
 }
 
 function initGraph(nodes, links) {
+  // Precompute shared geometry and materials
+  const sphereGeometry = new THREE.SphereGeometry(1, 8, 8); // Lower resolution for performance
+  const entityMaterial = new THREE.MeshBasicMaterial({ color: '#00FFFF', transparent: true, opacity: 0.9 });
+  const defMaterial = new THREE.MeshBasicMaterial({ color: '#FF00FF', transparent: true, opacity: 0.9 });
+  const particleGeometry = new THREE.BufferGeometry();
+  const particlePositions = new Float32Array(15 * 3); // Reduced to 15 particles
+  for (let i = 0; i < 15; i++) {
+    const theta = Math.random() * 2 * Math.PI;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 8 + Math.random() * 2;
+    particlePositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    particlePositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    particlePositions[i * 3 + 2] = r * Math.cos(phi);
+  }
+  particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const entityParticleMat = new THREE.PointsMaterial({ color: '#00FFFF', size: 1.5, transparent: true, opacity: 0.5 });
+  const defParticleMat = new THREE.PointsMaterial({ color: '#FF00FF', size: 1.5, transparent: true, opacity: 0.5 });
+
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
     .nodeLabel(node => `
@@ -70,53 +88,37 @@ function initGraph(nodes, links) {
       ${node.description || ''}
     `)
     .nodeAutoColorBy('group')
-    .nodeResolution(16)
     .nodeOpacity(0.9)
     .nodeThreeObject(node => {
       const group = new THREE.Group();
-      const geometry = new THREE.SphereGeometry(node.size);
-      const material = new THREE.MeshBasicMaterial({ 
-        color: node.group === 0 ? '#00FFFF' : '#FF00FF', // Bright teal for entities, magenta for definitions
-        transparent: true, 
-        opacity: 0.9 
-      });
-      const sphere = new THREE.Mesh(geometry, material);
+      const material = node.group === 0 ? entityMaterial : defMaterial;
+      const sphere = new THREE.Mesh(sphereGeometry, material);
+      sphere.scale.setScalar(node.size); // Scale instead of new geometry
       group.add(sphere);
-      const particleGeo = new THREE.BufferGeometry();
-      const positions = [];
-      for (let i = 0; i < 30; i++) {
-        const theta = Math.random() * 2 * Math.PI;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = node.size + Math.random() * 2;
-        positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
-      }
-      particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const particleMat = new THREE.PointsMaterial({ 
-        color: node.group === 0 ? '#00FFFF' : '#FF00FF', 
-        size: 1.5, 
-        transparent: true, 
-        opacity: 0.5 
-      });
-      const particles = new THREE.Points(particleGeo, particleMat);
+      const particleMat = node.group === 0 ? entityParticleMat : defParticleMat;
+      const particles = new THREE.Points(particleGeometry, particleMat);
       group.add(particles);
       return group;
     })
     .linkWidth(0.5)
-    .linkColor(() => '#FFFFFF') // White links
+    .linkColor(() => '#FFFFFF')
     .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
     .linkCurvature(0.25)
-    .linkDirectionalParticles(2)
+    .linkDirectionalParticles(1) // Reduced to 1 particle
     .linkDirectionalParticleSpeed(0.01)
     .linkDirectionalParticleWidth(1)
     .linkOpacity(0.7)
     .backgroundColor('#1a1a1a')
     .onEngineTick(() => {
-      Graph.scene().children.forEach(obj => {
-        if (obj.type === 'Points' && obj.parent.type === 'Group') {
-          obj.rotation.y += 0.01;
-        }
-      });
+      // Throttle particle rotation (every 5th frame)
+      if (performance.now() % 5 < 1) {
+        Graph.scene().children.forEach(obj => {
+          if (obj.type === 'Points' && obj.parent.type === 'Group') {
+            obj.rotation.y += 0.01;
+          }
+        });
+      }
     })
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
@@ -138,40 +140,51 @@ function initGraph(nodes, links) {
       setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
     });
 
+  // Optimized starry background
   const starGeo = new THREE.BufferGeometry();
-  const starPos = [];
-  for (let i = 0; i < 1000; i++) {
-    starPos.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
+  const starPos = new Float32Array(500 * 3); // Reduced to 500 stars
+  for (let i = 0; i < 500; i++) {
+    starPos[i * 3] = (Math.random() - 0.5) * 2000;
+    starPos[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+    starPos[i * 3 + 2] = (Math.random() - 0.5) * 2000;
   }
-  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
   const stars = new THREE.Points(starGeo, starMat);
   Graph.scene().add(stars);
 
-  // Search functionality
+  // Cache visibility states
+  let visibilityCache = new Map();
+  function updateVisibility(filterFn) {
+    nodes.forEach(node => {
+      const shouldBeVisible = filterFn(node);
+      if (visibilityCache.get(node.id) !== shouldBeVisible) {
+        visibilityCache.set(node.id, shouldBeVisible);
+        Graph.nodeVisibility({ id: node.id }, shouldBeVisible);
+      }
+    });
+  }
+
   document.getElementById('search').addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
-    Graph.nodeVisibility(node => node.name.toLowerCase().includes(term));
+    updateVisibility(node => node.name.toLowerCase().includes(term));
   });
 
-  // Filter controls
   document.getElementById('filterEntities').addEventListener('click', () => {
-    Graph.nodeVisibility(node => node.type === 'entity');
+    updateVisibility(node => node.type === 'entity');
   });
 
   document.getElementById('filterDefs').addEventListener('click', () => {
-    Graph.nodeVisibility(node => node.type === 'definition');
+    updateVisibility(node => node.type === 'definition');
   });
 
-  // Reset view (fixed)
   document.getElementById('resetView').addEventListener('click', () => {
-    Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000); // Reset to initial distance
-    Graph.zoomToFit(1000, 100); // Fit all nodes in view with padding
-    Graph.nodeVisibility(() => true); // Show all nodes
-    document.getElementById('search').value = ''; // Clear search input
+    Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
+    Graph.zoomToFit(1000, 100);
+    updateVisibility(() => true);
+    document.getElementById('search').value = '';
   });
 
-  // Enhanced camera controls
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
   window.addEventListener('mousedown', () => isDragging = true);
