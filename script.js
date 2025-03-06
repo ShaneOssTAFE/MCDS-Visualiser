@@ -10,9 +10,9 @@ fetch('schema.json')
 function processSchema(schema) {
   const nodes = [];
   const links = [];
-  const nodeMap = new Map();
+  const seenNodes = new Set();
 
-  // Process main entities from properties
+  // Process properties (main entities)
   Object.entries(schema.properties).forEach(([id, entity]) => {
     addNode(id, entity, 'entity');
   });
@@ -22,66 +22,44 @@ function processSchema(schema) {
     addNode(id, definition, 'definition');
   });
 
-  // Create relationships
+  // Create links between nodes
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
-      ? schema.properties[node.id] 
+      ? schema.properties[node.id]
       : schema.definitions[node.id];
-    
-    traverseSchema(schemaNode, node.id);
+
+    traverseProperties(schemaNode, node.id);
   });
 
   function addNode(id, data, type) {
-    if (!nodeMap.has(id)) {
-      const newNode = {
+    if (!seenNodes.has(id)) {
+      nodes.push({
         id,
         name: data.title || id,
         type,
         description: data.description || '',
-        group: type === 'entity' ? 0 : 1,
-        links: 0
-      };
-      nodes.push(newNode);
-      nodeMap.set(id, newNode);
+        group: type === 'entity' ? 0 : 1
+      });
+      seenNodes.add(id);
     }
   }
 
-  function traverseSchema(obj, sourceId) {
+  function traverseProperties(obj, sourceId) {
     if (!obj || typeof obj !== 'object') return;
 
-    // Handle arrays first
-    if (Array.isArray(obj)) {
-      obj.forEach(item => traverseSchema(item, sourceId));
-      return;
-    }
-
-    // Process object properties
     Object.entries(obj).forEach(([key, value]) => {
       if (key === '$ref') {
         const targetId = value.replace('#/definitions/', '');
-        if (nodeMap.has(targetId)) {
-          links.push({
-            source: sourceId,
-            target: targetId,
-            value: 3
-          });
-          nodeMap.get(sourceId).links++;
-        }
-      } 
-      else if (key === 'items' && value?.$ref) {
-        // Handle array items references
-        const targetId = value.$ref.replace('#/definitions/', '');
-        if (nodeMap.has(targetId)) {
-          links.push({
-            source: sourceId,
-            target: targetId,
-            value: 2
-          });
-          nodeMap.get(sourceId).links++;
+        if (seenNodes.has(targetId)) {
+          links.push({ source: sourceId, target: targetId });
         }
       }
-      else {
-        traverseSchema(value, sourceId);
+      else if (value && typeof value === 'object') {
+        if (Array.isArray(value)) {
+          value.forEach(item => traverseProperties(item, sourceId));
+        } else {
+          traverseProperties(value, sourceId);
+        }
       }
     });
   }
@@ -89,46 +67,42 @@ function processSchema(schema) {
   return { nodes, links };
 }
 
-// initGraph function remains the same as previous implementation
 function initGraph(nodes, links) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
     .nodeLabel(node => `
       <strong>${node.name}</strong><br/>
       <em>${node.type}</em><br/>
-      ${node.description || 'No description'}
+      ${node.description || ''}
     `)
     .nodeAutoColorBy('group')
-    .nodeValence(node => node.links * 2)
-    .linkDirectionalArrowLength(5)
+    .nodeResolution(16)
+    .nodeOpacity(0.9)
+    .linkWidth(0.5)
+    .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
-    .linkCurvature(0.2)
-    .linkWidth(0.8)
+    .linkCurvature(0.25)
     .onNodeHover(node => {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
-      tooltip.innerHTML = node ? `
-        <strong>${node.name}</strong><br>
-        <em>Type:</em> ${node.type}<br>
-        <em>Connections:</em> ${node.links}<br>
-        ${node.description || ''}
-      ` : '';
+      if (node) {
+        tooltip.innerHTML = `
+          <strong>${node.name}</strong><br/>
+          <em>Type:</em> ${node.type}<br/>
+          <em>Description:</em> ${node.description || 'N/A'}
+        `;
+      }
     })
     .onNodeClick(node => {
       Graph.centerAt(node.x, node.y, node.z, 1000);
-      Graph.zoom(4, 2000);
+      Graph.zoom(2, 2000);
     });
-
-  // Configure physics
-  Graph.d3Force('charge').strength(-120)
-    .d3Force('link').distance(150);
 
   // Search functionality
   document.getElementById('search').addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
     Graph.nodeVisibility(node => 
-      node.name.toLowerCase().includes(term) ||
-      node.description.toLowerCase().includes(term)
+      node.name.toLowerCase().includes(term)
     );
   });
 
@@ -158,6 +132,4 @@ function initGraph(nodes, links) {
     Graph.width(window.innerWidth);
     Graph.height(window.innerHeight);
   });
-
-  return Graph;
 }
