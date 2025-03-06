@@ -103,12 +103,29 @@ fetch("schema.json") // Adjust the path to your JSON file
             .linkWidth(2)
             .backgroundColor("#1a1a1a") // Dark background
             .nodeThreeObject(node => {
-                // Create glowing sphere instead of squares
-                const geometry = new THREE.SphereGeometry(6); // Adjust size
-                const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
-                const sphere = new THREE.Mesh(geometry, material);
-                return sphere;
-            })
+                const sprite = new THREE.Sprite();
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+            
+                // Adjust canvas size
+                canvas.width = 256;
+                canvas.height = 64;
+            
+                // Draw text
+                ctx.fillStyle = node.color;
+                ctx.font = "Bold 24px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(node.label, canvas.width / 2, canvas.height / 2);
+            
+                // Create texture from canvas
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture });
+                sprite.material = material;
+                sprite.scale.set(40, 20, 1); // Adjust scale
+            
+                return sprite;
+            });
             .onNodeClick((node, event) => { // Explicitly capture 'event'
                 if (!event) return; // Prevent errors if event is undefined
             
