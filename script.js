@@ -1,245 +1,134 @@
-// Function to parse your JSON schema and generate graph data
-function generateGraphData(schema) {
-    const nodes = [];
-    const links = [];
-    const nodeMap = new Map();
+fetch('schema.json')
+  .then(response => response.json())
+  .then(schema => {
+    const { nodes, links } = processSchema(schema);
+    initGraph(nodes, links);
+  })
+  .catch(error => console.error('Error loading schema:', error));
 
-    // D3 color scale for distinct colors
-    const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+function processSchema(schema) {
+  const nodes = [];
+  const links = [];
+  const seenNodes = new Set();
 
-    // Step 1: Create nodes from "properties"
-    Object.keys(schema.properties).forEach(key => {
-        const prop = schema.properties[key];
-        const node = {
-            id: key,
-            label: prop.title || key,
-            group: "entity",
-            description: prop.description || "",
-            properties: prop.type === "array" && prop.items && prop.items["$ref"]
-                ? schema.definitions[prop.items["$ref"].split("/").pop()].properties || {}
-                : prop.properties || {},
-            color: "#00d1b2" // Teal for entities
-        };
-        nodes.push(node);
-        nodeMap.set(key, node);
-    });
+  // Process properties (main entities)
+  Object.entries(schema.properties).forEach(([id, entity]) => {
+    addNode(id, entity, 'entity');
+  });
 
-    // Step 2: Create nodes from "definitions" (optional, for referenced types)
-    Object.keys(schema.definitions).forEach(defKey => {
-        if (!nodeMap.has(defKey + "s") && !defKey.endsWith("ID") && !["partyType", "gender"].includes(defKey)) {
-            const def = schema.definitions[defKey];
-            const node = {
-                id: defKey,
-                label: def.title || defKey,
-                group: "definition",
-                description: def.description || "",
-                properties: def.properties || {},
-                color: "#ff6b6b" // Red for definitions
-            };
-            nodes.push(node);
-            nodeMap.set(defKey, node);
+  // Process definitions
+  Object.entries(schema.definitions).forEach(([id, definition]) => {
+    addNode(id, definition, 'definition');
+  });
+
+  // Create links between nodes
+  nodes.forEach(node => {
+    const schemaNode = node.type === 'entity' 
+      ? schema.properties[node.id]
+      : schema.definitions[node.id];
+
+    traverseProperties(schemaNode, node.id);
+  });
+
+  function addNode(id, data, type) {
+    if (!seenNodes.has(id)) {
+      nodes.push({
+        id,
+        name: data.title || id,
+        type,
+        description: data.description || '',
+        group: type === 'entity' ? 0 : 1
+      });
+      seenNodes.add(id);
+    }
+  }
+
+  function traverseProperties(obj, sourceId) {
+    if (!obj || typeof obj !== 'object') return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (key === '$ref') {
+        const targetId = value.replace('#/definitions/', '');
+        if (seenNodes.has(targetId)) {
+          links.push({ source: sourceId, target: targetId });
         }
-    });
-
-    // Step 3: Extract relationships (links)
-    nodes.forEach(node => {
-        const props = node.properties;
-        if (props) {
-            Object.keys(props).forEach(propKey => {
-                const prop = props[propKey];
-                if (prop["$ref"]) {
-                    const refPath = prop["$ref"].split("/").pop();
-                    let targetNodeId = refPath;
-                    if (refPath.endsWith("ID")) {
-                        targetNodeId = refPath.replace("ID", "s");
-                    } else if (nodeMap.has(refPath + "s")) {
-                        targetNodeId = refPath + "s";
-                    }
-                    if (nodeMap.has(targetNodeId)) {
-                        links.push({
-                            source: node.id,
-                            target: targetNodeId,
-                            label: propKey
-                        });
-                    }
-                }
-                if (prop.type === "array" && prop.items && prop.items["$ref"]) {
-                    const refPath = prop.items["$ref"].split("/").pop();
-                    let targetNodeId = refPath;
-                    if (refPath.endsWith("ID")) {
-                        targetNodeId = refPath.replace("ID", "s");
-                    } else if (nodeMap.has(refPath + "s")) {
-                        targetNodeId = refPath + "s";
-                    }
-                    if (nodeMap.has(targetNodeId)) {
-                        links.push({
-                            source: node.id,
-                            target: targetNodeId,
-                            label: propKey
-                        });
-                    }
-                }
-            });
+      }
+      else if (value && typeof value === 'object') {
+        if (Array.isArray(value)) {
+          value.forEach(item => traverseProperties(item, sourceId));
+        } else {
+          traverseProperties(value, sourceId);
         }
+      }
     });
+  }
 
-    return { nodes, links };
+  return { nodes, links };
 }
 
-// Load your JSON schema and initialize the graph
-fetch("schema.json")
-    .then(response => response.json())
-    .then(schema => {
-        const graphData = generateGraphData(schema);
-
-        // Initialize the 3D force-directed graph
-        const Graph = ForceGraph3D()(document.getElementById("graph"))
-            .graphData(graphData)
-            .nodeLabel(node => node.label)
-            .nodeAutoColorBy('group') // Color nodes by group
-            .linkAutoColorBy(d => {
-                const sourceNode = typeof d.source === 'object' ? d.source : graphData.nodes.find(n => n.id === d.source);
-                return sourceNode ? sourceNode.group : 'default';
-            })
-            .linkWidth(2)
-            .linkOpacity(0.5)
-            .backgroundColor("#1a1a1a")
-            .nodeThreeObject(node => {
-                const group = new THREE.Group();
-                // Main sphere
-                const geometry = new THREE.SphereGeometry(6);
-                const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
-                const sphere = new THREE.Mesh(geometry, material);
-                group.add(sphere);
-
-                // Particle halo
-                const particleGeo = new THREE.BufferGeometry();
-                const positions = [];
-                for (let i = 0; i < 50; i++) {
-                    const theta = Math.random() * 2 * Math.PI;
-                    const phi = Math.acos(2 * Math.random() - 1);
-                    const r = 8 + Math.random() * 2;
-                    positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
-                }
-                particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-                const particleMat = new THREE.PointsMaterial({ color: node.color, size: 2, transparent: true, opacity: 0.5 });
-                const particles = new THREE.Points(particleGeo, particleMat);
-                group.add(particles);
-                return group;
-            })
-            .linkThreeObject(link => {
-                const geometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(1, 0, 0)
-                ]);
-                const material = new THREE.LineDashedMaterial({
-                    color: link.source.group === 'entity' ? '#00d1b2' : '#ff6b6b',
-                    dashSize: 5,
-                    gapSize: 3,
-                    transparent: true,
-                    opacity: 0.7
-                });
-                const line = new THREE.Line(geometry, material);
-                line.computeLineDistances();
-                return line;
-            })
-            .onEngineTick(() => {
-                Graph.scene().children.forEach(obj => {
-                    if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
-                });
-            })
-            .onNodeClick((node, event) => {
-                if (!event) return;
-                const tooltip = document.getElementById("tooltip");
-                tooltip.style.display = "block";
-                tooltip.style.left = `${event.clientX + 10}px`;
-                tooltip.style.top = `${event.clientY + 10}px`;
-                tooltip.innerHTML = `
-                    <strong>${node.label}</strong><br>
-                    <em>${node.description}</em><br>
-                    ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
-                `;
-            })
-            .onNodeHover(node => {
-                document.body.style.cursor = node ? "pointer" : "default";
-            })
-            .onBackgroundClick(() => {
-                document.getElementById("tooltip").style.display = "none";
-                // Reset to show all nodes and links
-                filteredData = {
-                    nodes: graphData.nodes,
-                    links: graphData.links
-                };
-                Graph.graphData(filteredData);
-            });
-
-        Graph.d3Force("charge").strength(-200);
-        Graph.d3Force("link").distance(100);
-
-        // Floating particle effect setup
-        const particleCount = 1000;
-        const particleGeo = new THREE.BufferGeometry();
-        const positions = [];
-        const speeds = [];
-        const particleMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, transparent: true, opacity: 0.6 });
-
-        for (let i = 0; i < particleCount; i++) {
-            positions.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
-            speeds.push(Math.random() * 0.2 + 0.1);  // Random speed for each particle
-        }
-
-        particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        const particles = new THREE.Points(particleGeo, particleMat);
-        Graph.scene().add(particles);
-
-        // Search and Filter functionality
-        let filteredData = graphData;
-
-        // Handle search input
-        document.getElementById("search").addEventListener("input", function(event) {
-            const searchTerm = event.target.value.toLowerCase();
-            const filteredNodes = graphData.nodes.filter(node => 
-                node.label.toLowerCase().includes(searchTerm) || node.description.toLowerCase().includes(searchTerm)
-            );
-
-            const filteredLinks = graphData.links.filter(link => {
-                const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                const targetNode = graphData.nodes.find(node => node.id === link.target);
-                return sourceNode && targetNode && (
-                    sourceNode.label.toLowerCase().includes(searchTerm) || targetNode.label.toLowerCase().includes(searchTerm)
-                );
-            });
-
-            filteredData = {
-                nodes: filteredNodes,
-                links: filteredLinks
-            };
-            Graph.graphData(filteredData); // Refresh graph
-        });
-
-        // Filter Entities
-        document.getElementById("filterEntities").addEventListener("click", () => {
-            filteredData = {
-                nodes: graphData.nodes.filter(node => node.group === 'entity'),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode && targetNode && sourceNode.group === 'entity' && targetNode.group === 'entity';
-                })
-            };
-            Graph.graphData(filteredData);
-        });
-        
-        // Filter Definitions
-        document.getElementById("filterDefs").addEventListener("click", () => {
-            filteredData = {
-                nodes: graphData.nodes.filter(node => node.group === 'definition'),
-                links: graphData.links.filter(link => {
-                    const sourceNode = graphData.nodes.find(node => node.id === link.source);
-                    const targetNode = graphData.nodes.find(node => node.id === link.target);
-                    return sourceNode && targetNode && sourceNode.group === 'definition' && targetNode.group === 'definition';
-                })
-            };
-            Graph.graphData(filteredData);
-        });
+function initGraph(nodes, links) {
+  const Graph = ForceGraph3D()(document.getElementById('graph'))
+    .graphData({ nodes, links })
+    .nodeLabel(node => `
+      <strong>${node.name}</strong><br/>
+      <em>${node.type}</em><br/>
+      ${node.description || ''}
+    `)
+    .nodeAutoColorBy('group')
+    .nodeResolution(16)
+    .nodeOpacity(0.9)
+    .linkWidth(0.5)
+    .linkDirectionalArrowLength(4)
+    .linkDirectionalArrowRelPos(1)
+    .linkCurvature(0.25)
+    .onNodeHover(node => {
+      const tooltip = document.getElementById('tooltip');
+      tooltip.style.display = node ? 'block' : 'none';
+      if (node) {
+        tooltip.innerHTML = `
+          <strong>${node.name}</strong><br/>
+          <em>Type:</em> ${node.type}<br/>
+          <em>Description:</em> ${node.description || 'N/A'}
+        `;
+      }
+    })
+    .onNodeClick(node => {
+      Graph.centerAt(node.x, node.y, node.z, 1000);
+      Graph.zoom(2, 2000);
     });
+
+  // Search functionality
+  document.getElementById('search').addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    Graph.nodeVisibility(node => 
+      node.name.toLowerCase().includes(term)
+    );
+  });
+
+  // Filter controls
+  document.getElementById('filterEntities').addEventListener('click', () => {
+    Graph.nodeVisibility(node => node.type === 'entity');
+  });
+
+  document.getElementById('filterDefs').addEventListener('click', () => {
+    Graph.nodeVisibility(node => node.type === 'definition');
+  });
+
+  // Camera controls
+  let isDragging = false;
+  window.addEventListener('mousedown', () => isDragging = true);
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    Graph.cameraPosition({
+      x: Graph.cameraPosition().x + e.movementX * 2,
+      y: Graph.cameraPosition().y - e.movementY * 2
+    });
+  });
+
+  // Responsive handling
+  window.addEventListener('resize', () => {
+    Graph.width(window.innerWidth);
+    Graph.height(window.innerHeight);
+  });
+}
