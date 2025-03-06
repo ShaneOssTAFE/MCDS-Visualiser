@@ -1,9 +1,9 @@
-// Function to parse the JSON schema and generate graph data
 function generateGraphData(schema) {
     const nodes = [];
     const links = [];
     const nodeMap = new Map();
 
+    // Process top-level properties
     Object.keys(schema.properties).forEach(key => {
         const prop = schema.properties[key];
         const node = {
@@ -11,32 +11,34 @@ function generateGraphData(schema) {
             label: prop.title || key,
             group: "entity",
             description: prop.description || "",
-            properties: prop.type === "array" && prop.items && prop.items["$ref"]
-                ? schema.definitions[prop.items["$ref"].split("/").pop()].properties || {}
-                : prop.properties || {}
+            properties: {}
         };
+
+        if (prop.items && prop.items.$ref) {
+            const refKey = prop.items.$ref.split("/").pop();
+            if (schema.definitions && schema.definitions[refKey]) {
+                node.properties = schema.definitions[refKey].properties || {};
+            }
+        }
+
         nodes.push(node);
         nodeMap.set(key, node);
     });
 
+    // Process relationships from definitions
     nodes.forEach(node => {
-        const props = node.properties;
-        if (props) {
-            Object.keys(props).forEach(propKey => {
-                const prop = props[propKey];
-                if (prop["$ref"]) {
-                    const refPath = prop["$ref"].split("/").pop();
-                    let targetNodeId = refPath.endsWith("ID") ? refPath.replace("ID", "s") : refPath + "s";
-                    if (nodeMap.has(targetNodeId)) {
-                        links.push({
-                            source: node.id,
-                            target: targetNodeId,
-                            label: propKey
-                        });
-                    }
+        Object.entries(node.properties).forEach(([propKey, prop]) => {
+            if (prop.$ref) {
+                const refKey = prop.$ref.split("/").pop();
+                if (nodeMap.has(refKey)) {
+                    links.push({
+                        source: node.id,
+                        target: refKey,
+                        label: propKey
+                    });
                 }
-            });
-        }
+            }
+        });
     });
 
     return { nodes, links };
