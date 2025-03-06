@@ -37,7 +37,7 @@ function generateGraphData(schema) {
                 color: "#ff6b6b" // Red for definitions
             };
             nodes.push(node);
-            nodeMap.set(defKey, node); // Fixed: Use 'defKey' instead of 'key'
+            nodeMap.set(defKey, node);
         }
     });
 
@@ -104,17 +104,14 @@ fetch("schema.json")
             .linkWidth(2)
             .linkOpacity(0.5)
             .backgroundColor("#1a1a1a")
-            
-            // Add Particle Effects to Nodes
             .nodeThreeObject(node => {
                 const group = new THREE.Group();
-                
-                // Main sphere (node)
+                // Main sphere
                 const geometry = new THREE.SphereGeometry(6);
                 const material = new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.9 });
                 const sphere = new THREE.Mesh(geometry, material);
                 group.add(sphere);
-                
+
                 // Particle halo
                 const particleGeo = new THREE.BufferGeometry();
                 const positions = [];
@@ -128,11 +125,8 @@ fetch("schema.json")
                 const particleMat = new THREE.PointsMaterial({ color: node.color, size: 2, transparent: true, opacity: 0.5 });
                 const particles = new THREE.Points(particleGeo, particleMat);
                 group.add(particles);
-                
                 return group;
             })
-            
-            // Add Animated Links (Dashed Links)
             .linkThreeObject(link => {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
@@ -154,63 +148,41 @@ fetch("schema.json")
                     if (obj.type === 'Line') obj.material.dashOffset -= 0.1; // Animate dash
                 });
             })
-            
-            // Add floating particle background effect
-            const particleCount = 1000;
-            const particleGeo = new THREE.BufferGeometry();
-            const positions = [];
-            const speeds = [];
-            const particleMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, transparent: true, opacity: 0.6 });
-            
-            for (let i = 0; i < particleCount; i++) {
-                positions.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
-                speeds.push(Math.random() * 0.2 + 0.1);  // Random speed for each particle
-            }
-            
-            particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            const particles = new THREE.Points(particleGeo, particleMat);
-            
-            // Add particles to the scene
-            Graph.scene().add(particles);
-            
-            // Animate particles floating
-            .onEngineTick(() => {
-                for (let i = 0; i < particleCount; i++) {
-                    positions[i * 3] += speeds[i]; // Move particles in x-direction
-                    if (positions[i * 3] > 1000) positions[i * 3] = -1000; // Reset when out of bounds
-                }
-                particleGeo.attributes.position.needsUpdate = true;
+            .onNodeClick((node, event) => {
+                if (!event) return;
+                const tooltip = document.getElementById("tooltip");
+                tooltip.style.display = "block";
+                tooltip.style.left = `${event.clientX + 10}px`;
+                tooltip.style.top = `${event.clientY + 10}px`;
+                tooltip.innerHTML = `
+                    <strong>${node.label}</strong><br>
+                    <em>${node.description}</em><br>
+                    ${Object.entries(node.properties).map(([key, value]) => `${key}: ${value.type || value}`).join("<br>")}
+                `;
+            })
+            .onNodeHover(node => {
+                document.body.style.cursor = node ? "pointer" : "default";
+            })
+            .onBackgroundClick(() => {
+                document.getElementById("tooltip").style.display = "none";
             });
 
-        // Handle Node Hover and Click Events
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
-
-        // Search and Filter Logic
-        document.getElementById('search').addEventListener('input', function(event) {
-            const searchTerm = event.target.value.toLowerCase();
-            graphData.nodes.forEach(node => {
-                if (node.label.toLowerCase().includes(searchTerm)) {
-                    node.visible = true;
-                } else {
-                    node.visible = false;
-                }
-            });
-            Graph.graphData(graphData);
-        });
-
-        document.getElementById('filterEntities').addEventListener('click', function() {
-            graphData.nodes.forEach(node => {
-                node.visible = node.group === 'entity';
-            });
-            Graph.graphData(graphData);
-        });
-
-        document.getElementById('filterDefs').addEventListener('click', function() {
-            graphData.nodes.forEach(node => {
-                node.visible = node.group === 'definition';
-            });
-            Graph.graphData(graphData);
-        });
     })
     .catch(error => console.error("Error loading JSON:", error));
+
+// Add Gradient Background
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+document.body.appendChild(canvas);
+
+const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+gradient.addColorStop(0, "#1a1a1a");
+gradient.addColorStop(1, "#000000");
+
+ctx.fillStyle = gradient;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
