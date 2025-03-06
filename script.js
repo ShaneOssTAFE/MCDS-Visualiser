@@ -1,3 +1,79 @@
+fetch('schema.json')
+  .then(response => response.json())
+  .then(schema => {
+    const { nodes, links } = processSchema(schema);
+    initGraph(nodes, links);
+  })
+  .catch(error => console.error('Error loading schema:', error));
+
+function processSchema(schema) {
+  const nodes = [];
+  const links = [];
+  const nodeMap = new Map(); // More efficient than Set for lookups
+
+  // Unified node processing with schema-specific handling
+  const processNode = (id, data, type) => {
+    if (!nodeMap.has(id)) {
+      const title = data.title || id.replace(/([A-Z])/g, ' $1').trim(); // Convert camelCase to title
+      const category = type === 'entity' ? 'Container' : 
+                      id.toLowerCase().includes('id') ? 'Identifier' :
+                      'Component';
+      
+      const node = {
+        id,
+        name: title,
+        type,
+        category,
+        description: data.description || `No description for ${title}`,
+        group: type === 'entity' ? 0 : 1,
+        links: 0
+      };
+      
+      nodes.push(node);
+      nodeMap.set(id, node);
+    }
+  };
+
+  // Process schema structure
+  Object.entries(schema.properties).forEach(([id, entity]) => processNode(id, entity, 'entity'));
+  Object.entries(schema.definitions).forEach(([id, def]) => processNode(id, def, 'definition'));
+
+  // Enhanced reference detection with array handling
+  const findRefs = (obj, sourceId) => {
+    if (!obj || typeof obj !== 'object') return;
+    
+    // Handle array items first
+    if (Array.isArray(obj)) {
+      obj.forEach(item => findRefs(item, sourceId));
+      return;
+    }
+
+    // Check for direct $ref
+    if (obj.$ref) {
+      const targetId = obj.$ref.replace('#/definitions/', '');
+      if (nodeMap.has(targetId)) {
+        links.push({ source: sourceId, target: targetId });
+        nodeMap.get(sourceId).links++;
+      }
+    }
+
+    // Recursive property check
+    Object.values(obj).forEach(value => {
+      if (typeof value === 'object') findRefs(value, sourceId);
+    });
+  };
+
+  // Process relationships
+  nodes.forEach(node => {
+    const schemaNode = node.type === 'entity' 
+      ? schema.properties[node.id] 
+      : schema.definitions[node.id];
+    findRefs(schemaNode, node.id);
+  });
+
+  return { nodes, links };
+}
+
 function initGraph(nodes, links) {
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
