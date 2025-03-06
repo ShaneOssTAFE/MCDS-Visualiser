@@ -63,11 +63,11 @@ function processSchema(schema) {
 
 function initGraph(nodes, links) {
   // Precompute shared geometry and materials
-  const sphereGeometry = new THREE.SphereGeometry(1, 8, 8); // Lower resolution for performance
+  const sphereGeometry = new THREE.SphereGeometry(1, 8, 8);
   const entityMaterial = new THREE.MeshBasicMaterial({ color: '#00FFFF', transparent: true, opacity: 0.9 });
   const defMaterial = new THREE.MeshBasicMaterial({ color: '#FF00FF', transparent: true, opacity: 0.9 });
   const particleGeometry = new THREE.BufferGeometry();
-  const particlePositions = new Float32Array(15 * 3); // Reduced to 15 particles
+  const particlePositions = new Float32Array(15 * 3);
   for (let i = 0; i < 15; i++) {
     const theta = Math.random() * 2 * Math.PI;
     const phi = Math.acos(2 * Math.random() - 1);
@@ -79,6 +79,13 @@ function initGraph(nodes, links) {
   particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
   const entityParticleMat = new THREE.PointsMaterial({ color: '#00FFFF', size: 1.5, transparent: true, opacity: 0.5 });
   const defParticleMat = new THREE.PointsMaterial({ color: '#FF00FF', size: 1.5, transparent: true, opacity: 0.5 });
+
+  // Track mouse position globally
+  let mouseX = 0, mouseY = 0;
+  window.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
 
   const Graph = ForceGraph3D()(document.getElementById('graph'))
     .graphData({ nodes, links })
@@ -93,7 +100,7 @@ function initGraph(nodes, links) {
       const group = new THREE.Group();
       const material = node.group === 0 ? entityMaterial : defMaterial;
       const sphere = new THREE.Mesh(sphereGeometry, material);
-      sphere.scale.setScalar(node.size); // Scale instead of new geometry
+      sphere.scale.setScalar(node.size);
       group.add(sphere);
       const particleMat = node.group === 0 ? entityParticleMat : defParticleMat;
       const particles = new THREE.Points(particleGeometry, particleMat);
@@ -105,13 +112,12 @@ function initGraph(nodes, links) {
     .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
     .linkCurvature(0.25)
-    .linkDirectionalParticles(1) // Reduced to 1 particle
+    .linkDirectionalParticles(1)
     .linkDirectionalParticleSpeed(0.01)
     .linkDirectionalParticleWidth(1)
     .linkOpacity(0.7)
     .backgroundColor('#1a1a1a')
     .onEngineTick(() => {
-      // Throttle particle rotation (every 5th frame)
       if (performance.now() % 5 < 1) {
         Graph.scene().children.forEach(obj => {
           if (obj.type === 'Points' && obj.parent.type === 'Group') {
@@ -124,8 +130,8 @@ function initGraph(nodes, links) {
       const tooltip = document.getElementById('tooltip');
       tooltip.style.display = node ? 'block' : 'none';
       if (node) {
-        tooltip.style.left = `${event.clientX + 10}px`;
-        tooltip.style.top = `${event.clientY + 10}px`;
+        tooltip.style.left = `${mouseX + 10}px`; // Use global mouse coordinates
+        tooltip.style.top = `${mouseY + 10}px`;
         tooltip.innerHTML = `
           <strong>${node.name}</strong><br/>
           <em>Type:</em> ${node.type}<br/>
@@ -140,9 +146,8 @@ function initGraph(nodes, links) {
       setTimeout(() => node.__threeObj.children[0].material.color.set(node.group === 0 ? '#00FFFF' : '#FF00FF'), 2000);
     });
 
-  // Optimized starry background
   const starGeo = new THREE.BufferGeometry();
-  const starPos = new Float32Array(500 * 3); // Reduced to 500 stars
+  const starPos = new Float32Array(500 * 3);
   for (let i = 0; i < 500; i++) {
     starPos[i * 3] = (Math.random() - 0.5) * 2000;
     starPos[i * 3 + 1] = (Math.random() - 0.5) * 2000;
@@ -153,7 +158,6 @@ function initGraph(nodes, links) {
   const stars = new THREE.Points(starGeo, starMat);
   Graph.scene().add(stars);
 
-  // Cache visibility states
   let visibilityCache = new Map();
   function updateVisibility(filterFn) {
     nodes.forEach(node => {
