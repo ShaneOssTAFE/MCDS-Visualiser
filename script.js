@@ -1,14 +1,12 @@
-// Function to generate unique colors for node groups
+// Import D3 for color schemes
+const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+// Function to assign colors based on node groups
 function getColorForGroup(group) {
-    const colors = [
-        "#ff6b6b", "#ffb86c", "#fffa65", "#8aff8a", "#8ab4ff",
-        "#d29cff", "#ff8ad2", "#6bd8ff", "#5eff5e", "#ffa07a"
-    ];
-    const hash = [...group].reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colors[hash % colors.length];
+    return colorScale(group || "default");
 }
 
-// Function to parse the JSON schema and generate graph data
+// Function to parse JSON schema and generate graph data
 function generateGraphData(schema) {
     const nodes = [];
     const links = [];
@@ -16,21 +14,15 @@ function generateGraphData(schema) {
 
     Object.keys(schema.properties).forEach(key => {
         const prop = schema.properties[key];
+        const group = prop.type || "default"; // Use type to categorize nodes
         const node = {
             id: key,
             label: prop.title || key,
-            group: prop.type || "default", // Use type to categorize
+            group: group,
             description: prop.description || "",
-            properties: {},
-            color: getColorForGroup(prop.type || "default")
+            properties: prop.properties || {},
+            color: getColorForGroup(group)
         };
-
-        if (prop.items && prop.items.$ref) {
-            const refKey = prop.items.$ref.split("/").pop();
-            if (schema.definitions && schema.definitions[refKey]) {
-                node.properties = schema.definitions[refKey].properties || {};
-            }
-        }
 
         nodes.push(node);
         nodeMap.set(key, node);
@@ -62,12 +54,12 @@ fetch("schema.json")
         const Graph = ForceGraph3D()(document.getElementById("graph"))
             .graphData(graphData)
             .nodeLabel(node => node.label) // Label nodes with text
-            .linkColor(() => "#ffffff")
-            .linkWidth(2)
+            .linkColor(() => "#aaa") // Light gray for better contrast
+            .linkWidth(1.5) // Make links more visible
             .backgroundColor("#1a1a1a")
-            .nodeColor(node => node.color) // Apply color to each node
+            .nodeColor(node => node.color) // Apply unique colors
             .nodeThreeObject(node => {
-                // Create text sprite instead of default spheres
+                // Create text sprite instead of spheres
                 const sprite = new THREE.Sprite();
                 const canvas = document.createElement("canvas");
                 const ctx = canvas.getContext("2d");
@@ -103,7 +95,7 @@ fetch("schema.json")
                 document.getElementById("tooltip").style.display = "none";
             });
 
-        Graph.d3Force("charge").strength(-200);
-        Graph.d3Force("link").distance(100);
+        Graph.d3Force("charge").strength(-300); // Stronger repulsion
+        Graph.d3Force("link").distance(120); // Increase link distance
     })
     .catch(error => console.error("Error loading JSON:", error));
