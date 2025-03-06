@@ -125,7 +125,7 @@ fetch("schema.json") // Adjust the path to your JSON file
                 sprite.scale.set(40, 20, 1); // Adjust scale
             
                 return sprite;
-            });
+            })
             .onNodeClick((node, event) => { // Explicitly capture 'event'
                 if (!event) return; // Prevent errors if event is undefined
             
