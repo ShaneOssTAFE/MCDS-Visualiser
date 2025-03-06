@@ -3,54 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <title>MCDS 3D Data Model Visualizer</title>
-    <style>
-        body {
-            margin: 0;
-            background: #1a1a1a;
-            color: #fff;
-            font-family: 'Overpass', sans-serif;
-        }
-        #graph {
-            width: 100vw;
-            height: 100vh;
-        }
-        .tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            display: none;
-            color: #fff;
-            z-index: 10;
-        }
-        .controls {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            border-radius: 5px;
-        }
-        .controls input, .controls button {
-            padding: 8px;
-            margin-right: 10px;
-            background: #333;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        .controls input {
-            width: 200px;
-        }
-        .controls button {
-            width: 100px;
-        }
-        .controls button:hover {
-            background-color: #00d1b2;
-        }
-    </style>
+<style>
+    body {
+        margin: 0;
+        background: #1a1a1a;
+        color: #fff;
+        font-family: 'Overpass', sans-serif;
+    }
+    #graph {
+        width: 100vw;
+        height: 100vh;
+    }
+    .tooltip {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+        color: #fff;
+        z-index: 10;
+    }
+    .controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1;
+        padding: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 5px;
+    }
+    .controls input, .controls button {
+        padding: 8px;
+        margin-right: 10px;
+        background: #333;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+    .controls input {
+        width: 200px;
+    }
+    .controls button {
+        width: 120px;
+    }
+    .controls button:hover {
+        background-color: #008080; /* Adjusted hover for better contrast */
+        color: #ffffff; /* Ensure text remains readable */
+    }
+    .controls input:focus, .controls button:focus {
+        outline: 3px solid #00d1b2; /* Focus styles for accessibility */
+    }
+</style>
 </head>
 <body>
     <div id="graph"></div>
