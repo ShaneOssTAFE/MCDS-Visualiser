@@ -169,6 +169,30 @@ fetch("schema.json")
 
         Graph.d3Force("charge").strength(-200);
         Graph.d3Force("link").distance(100);
+
+        // Search and Filter functionality
+        document.getElementById("search").addEventListener("input", (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            Graph.graphData(graphData);
+            Graph.nodeIdAccessor(node => node.id);
+            Graph.nodeLabel(node => node.label);
+            Graph.nodeAutoColorBy('group');
+            Graph.nodeVisibility(node => node.label.toLowerCase().includes(searchTerm));
+        });
+
+        document.getElementById("filterEntities").addEventListener("click", () => {
+            Graph.graphData({
+                nodes: graphData.nodes.filter(node => node.group === 'entity'),
+                links: graphData.links.filter(link => graphData.nodes.find(node => node.id === link.source || node.id === link.target).group === 'entity')
+            });
+        });
+
+        document.getElementById("filterDefs").addEventListener("click", () => {
+            Graph.graphData({
+                nodes: graphData.nodes.filter(node => node.group === 'definition'),
+                links: graphData.links.filter(link => graphData.nodes.find(node => node.id === link.source || node.id === link.target).group === 'definition')
+            });
+        });
     })
     .catch(error => console.error("Error loading JSON:", error));
 
