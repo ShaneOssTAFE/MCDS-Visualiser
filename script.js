@@ -177,12 +177,14 @@ function initGraph(nodes, links, schema) {
     if (node) {
       tooltip.style.left = `${mouseX + 10}px`;
       tooltip.style.top = `${mouseY + 10}px`;
+      const schemaNode = node.type === 'entity' ? schema.properties[node.id] : schema.definitions[node.id];
+      const nodeType = schemaNode.type || (node.properties.length > 0 ? 'object' : 'unknown');
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
         : node.enum && node.enum.length > 0 ? `Enum: ${node.enum.join(', ').substring(0, 100)}${node.enum.join(', ').length > 100 ? '...' : ''}` : 'None';
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
-        <em>Type:</em> ${node.type}<br/>
+        <em>Type:</em> ${nodeType}<br/>
         <em>Description:</em> ${node.description || 'N/A'}<br/>
         <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
         <em>Properties/Enum:</em><br/>${propList}
@@ -255,7 +257,8 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
-  const resetViewBtn = document.getElementpagenum: 10, () => {
+  const resetViewBtn = document.getElementById('resetView');
+  resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
     updateVisibility(() => true);
