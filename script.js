@@ -190,7 +190,7 @@ function initGraph(nodes, links, schema) {
       if (node.completeness < 100) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
-        if (!hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing properties');
+        if (!hasProps && !hasEnum && !isSimpleTypeComplete) qualityIssues.push('Missing properties'); // Only if no props, no enum, and not simple type
         if (!hasEnum && !hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing enum');
       }
       const propList = node.properties.length > 0 
@@ -281,7 +281,7 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
-  // Create the completeness slider and label
+  // Create and position the completeness slider and label
   const completenessFilter = document.createElement('input');
   completenessFilter.type = 'range';
   completenessFilter.min = '0';
@@ -298,15 +298,22 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.completeness >= minCompleteness);
   });
 
-  // Create Save View and Restore View buttons
+  // Insert the slider and label between filterDefsBtn and resetViewBtn
+  const controls = document.getElementById('controls');
+  controls.insertBefore(completenessFilter, resetViewBtn);
+  controls.insertBefore(completenessLabel, resetViewBtn);
+
+  // Create and append Save View and Restore View buttons
   let savedPosition = null;
   const saveViewBtn = document.createElement('button');
   saveViewBtn.textContent = 'Save View';
   saveViewBtn.style.margin = '5px';
+  controls.appendChild(saveViewBtn);
   
   const restoreViewBtn = document.createElement('button');
   restoreViewBtn.textContent = 'Restore View';
   restoreViewBtn.style.margin = '5px';
+  controls.appendChild(restoreViewBtn);
 
   saveViewBtn.addEventListener('click', () => {
     savedPosition = Graph.cameraPosition();
@@ -319,21 +326,6 @@ function initGraph(nodes, links, schema) {
     }
     restoreViewBtn.blur();
   });
-
-  // Reorder the controls explicitly
-  const controls = document.getElementById('controls');
-  // Remove all children and re-add in the correct order
-  while (controls.firstChild) {
-    controls.removeChild(controls.firstChild);
-  }
-  controls.appendChild(searchInput);
-  controls.appendChild(filterEntitiesBtn);
-  controls.appendChild(filterDefsBtn);
-  controls.appendChild(completenessFilter);
-  controls.appendChild(completenessLabel);
-  controls.appendChild(resetViewBtn);
-  controls.appendChild(saveViewBtn);
-  controls.appendChild(restoreViewBtn);
 
   const qualityPanel = document.createElement('div');
   qualityPanel.style.position = 'absolute';
