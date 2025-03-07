@@ -179,6 +179,17 @@ function initGraph(nodes, links, schema) {
       tooltip.style.top = `${mouseY + 10}px`;
       const schemaNode = node.type === 'entity' ? schema.properties[node.id] : schema.definitions[node.id];
       const nodeType = schemaNode.type || (node.properties.length > 0 ? 'object' : 'unknown');
+      const hasTitle = !!schemaNode.title;
+      const hasDesc = !!schemaNode.description || !!schemaNode.$comment;
+      const hasProps = node.properties.length > 0;
+      const hasEnum = Array.isArray(schemaNode.enum) && schemaNode.enum.length > 0;
+      const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(schemaNode.type);
+      const qualityIssues = [];
+      if (node.completeness < 100) {
+        if (!hasTitle) qualityIssues.push('Missing title');
+        if (!hasDesc) qualityIssues.push('Missing description');
+        if (!(hasProps || hasEnum || isSimpleTypeComplete)) qualityIssues.push('Missing properties or enum');
+      }
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
         : node.enum && node.enum.length > 0 ? `Enum: ${node.enum.join(', ').substring(0, 100)}${node.enum.join(', ').length > 100 ? '...' : ''}` : 'None';
@@ -188,6 +199,7 @@ function initGraph(nodes, links, schema) {
         <em>Description:</em> ${node.description || 'N/A'}<br/>
         <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
         <em>Properties/Enum:</em><br/>${propList}
+        ${qualityIssues.length > 0 ? `<br/><em>Data Quality Issues:</em><br/>${qualityIssues.join('<br/>')}` : ''}
       `;
       node.highlighted = true;
       links.forEach(l => {
