@@ -50,7 +50,7 @@ function processSchema(schema) {
   });
 
   function addNode(id, data, type) {
-    if (!seenNodes.has(id) && (data.properties || data.enum || type === 'entity' || type === 'definition')) {
+    if (!seenNodes.has(id) && (data.properties || data.enum || data.type || type === 'entity' || type === 'definition')) {
       const properties = data.properties 
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
@@ -62,7 +62,8 @@ function processSchema(schema) {
       const hasDesc = !!data.description || !!data.$comment;
       const hasProps = properties.length > 0;
       const hasEnum = Array.isArray(data.enum) && data.enum.length > 0;
-      const completeness = (hasTitle + hasDesc + (hasProps || hasEnum)) / 3 * 100; // Updated formula
+      const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(data.type);
+      const completeness = (hasTitle + hasDesc + (hasProps || hasEnum || isSimpleTypeComplete)) / 3 * 100;
       nodes.push({
         id,
         name: data.title || id,
@@ -71,7 +72,7 @@ function processSchema(schema) {
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
         properties,
-        enum: data.enum || [], // Store enum array in node
+        enum: data.enum || [],
         completeness,
         cluster: type === 'entity' ? id : null
       });
@@ -254,8 +255,7 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
-  const resetViewBtn = document.getElementById('resetView');
-  resetViewBtn.addEventListener('click', () => {
+  const resetViewBtn = document.getElementpagenum: 10, () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
     updateVisibility(() => true);
