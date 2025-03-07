@@ -59,8 +59,8 @@ function processSchema(schema) {
           }))
         : [];
       const hasTitle = !!data.title;
-      const description = data.description || data.$comment || null; // Use null to indicate missing
-      const hasDesc = description !== null; // Presence of description attribute
+      const description = data.description || data.$comment || null;
+      const hasDesc = description !== null;
       const hasProps = properties.length > 0;
       const hasEnum = Array.isArray(data.enum) && data.enum.length > 0;
       const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(data.type);
@@ -69,7 +69,7 @@ function processSchema(schema) {
         id,
         name: data.title || id,
         type,
-        description, // Store as null if missing, or the actual string
+        description,
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
         properties,
@@ -182,7 +182,7 @@ function initGraph(nodes, links, schema) {
       const nodeType = schemaNode.type || (node.properties.length > 0 ? 'object' : 'unknown');
       const hasTitle = !!schemaNode.title;
       const descriptionText = node.description === null ? 'N/A' : (node.description === '' ? '(empty)' : node.description);
-      const hasDesc = node.description !== null; // Attribute exists
+      const hasDesc = node.description !== null;
       const hasProps = node.properties.length > 0;
       const hasEnum = Array.isArray(schemaNode.enum) && schemaNode.enum.length > 0;
       const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(schemaNode.type);
@@ -191,7 +191,7 @@ function initGraph(nodes, links, schema) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
         if (!hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing properties');
-        if (!hasEnum && !hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing enum'); // Only if no properties and not simple type
+        if (!hasEnum && !hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing enum');
       }
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
@@ -281,7 +281,7 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
-  // Create and position the completeness slider and label
+  // Create the completeness slider and label
   const completenessFilter = document.createElement('input');
   completenessFilter.type = 'range';
   completenessFilter.min = '0';
@@ -298,21 +298,15 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.completeness >= minCompleteness);
   });
 
-  // Insert the slider and label between filterDefsBtn and resetViewBtn
-  const controls = document.getElementById('controls');
-  controls.insertBefore(completenessFilter, resetViewBtn);
-  controls.insertBefore(completenessLabel, resetViewBtn);
-
+  // Create Save View and Restore View buttons
   let savedPosition = null;
   const saveViewBtn = document.createElement('button');
   saveViewBtn.textContent = 'Save View';
   saveViewBtn.style.margin = '5px';
-  controls.appendChild(saveViewBtn);
   
   const restoreViewBtn = document.createElement('button');
   restoreViewBtn.textContent = 'Restore View';
   restoreViewBtn.style.margin = '5px';
-  controls.appendChild(restoreViewBtn);
 
   saveViewBtn.addEventListener('click', () => {
     savedPosition = Graph.cameraPosition();
@@ -325,6 +319,21 @@ function initGraph(nodes, links, schema) {
     }
     restoreViewBtn.blur();
   });
+
+  // Reorder the controls explicitly
+  const controls = document.getElementById('controls');
+  // Remove all children and re-add in the correct order
+  while (controls.firstChild) {
+    controls.removeChild(controls.firstChild);
+  }
+  controls.appendChild(searchInput);
+  controls.appendChild(filterEntitiesBtn);
+  controls.appendChild(filterDefsBtn);
+  controls.appendChild(completenessFilter);
+  controls.appendChild(completenessLabel);
+  controls.appendChild(resetViewBtn);
+  controls.appendChild(saveViewBtn);
+  controls.appendChild(restoreViewBtn);
 
   const qualityPanel = document.createElement('div');
   qualityPanel.style.position = 'absolute';
