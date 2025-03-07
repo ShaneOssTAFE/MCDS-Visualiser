@@ -43,14 +43,14 @@ function processSchema(schema) {
       } else {
         // Fallback if no definitions (based on title/description)
         const hasTitle = !!schema.properties[node.id].title;
-        const hasDesc = !!schema.properties[node.id].description;
+        const hasDesc = !!schema.properties[node.id].description || !!schema.properties[node.id].$comment;
         node.completeness = (hasTitle + hasDesc) / 2 * 100 || 0;
       }
     }
   });
 
   function addNode(id, data, type) {
-    if (!seenNodes.has(id) && (data.properties || type === 'entity' || type === 'definition')) {
+    if (!seenNodes.has(id) && (data.properties || data.enum || type === 'entity' || type === 'definition')) {
       const properties = data.properties 
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
@@ -59,14 +59,15 @@ function processSchema(schema) {
           }))
         : [];
       const hasTitle = !!data.title;
-      const hasDesc = !!data.description;
+      const hasDesc = !!data.description || !!data.$comment;
       const hasProps = properties.length > 0;
-      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100; // Simplified without required check
+      const hasEnum = Array.isArray(data.enum) && data.enum.length > 0;
+      const completeness = (hasTitle + hasDesc + hasProps + hasEnum) / 4 * 100;
       nodes.push({
         id,
         name: data.title || id,
         type,
-        description: data.description || '',
+        description: data.description || data.$comment || '',
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
         properties,
@@ -176,13 +177,13 @@ function initGraph(nodes, links, schema) {
       tooltip.style.top = `${mouseY + 10}px`;
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
-        : 'None';
+        : node.enum ? `Enum: ${node.enum.join(', ')}` : 'None';
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
         <em>Type:</em> ${node.type}<br/>
         <em>Description:</em> ${node.description || 'N/A'}<br/>
         <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
-        <em>Properties:</em><br/>${propList}
+        <em>Properties/Enum:</em><br/>${propList}
       `;
       node.highlighted = true;
       links.forEach(l => {
