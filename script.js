@@ -190,7 +190,7 @@ function initGraph(nodes, links, schema) {
       if (node.completeness < 100) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
-        if (!hasProps && !hasEnum && !isSimpleTypeComplete) qualityIssues.push('Missing properties'); // Only if no props, no enum, and not simple type
+        if (!hasProps && !hasEnum && !isSimpleTypeComplete) qualityIssues.push('Missing properties');
         if (!hasEnum && !hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing enum');
       }
       const propList = node.properties.length > 0 
@@ -300,8 +300,13 @@ function initGraph(nodes, links, schema) {
 
   // Insert the slider and label between filterDefsBtn and resetViewBtn
   const controls = document.getElementById('controls');
-  controls.insertBefore(completenessFilter, resetViewBtn);
-  controls.insertBefore(completenessLabel, resetViewBtn);
+  if (controls) {
+    console.log('Controls div found, adding slider and label');
+    controls.insertBefore(completenessFilter, resetViewBtn);
+    controls.insertBefore(completenessLabel, resetViewBtn);
+  } else {
+    console.error('Controls div not found in the DOM');
+  }
 
   // Create and append Save View and Restore View buttons
   let savedPosition = null;
@@ -327,6 +332,25 @@ function initGraph(nodes, links, schema) {
     restoreViewBtn.blur();
   });
 
+  // Create and hide the export button
+  const exportBtn = document.createElement('button');
+  exportBtn.id = 'exportBtn';
+  exportBtn.textContent = 'Export Data';
+  exportBtn.style.position = 'absolute';
+  exportBtn.style.bottom = '10px';
+  exportBtn.style.right = '10px';
+  exportBtn.style.padding = '8px 12px';
+  exportBtn.style.background = '#333';
+  exportBtn.style.color = '#fff';
+  exportBtn.style.border = '2px solid #fff';
+  exportBtn.style.borderRadius = '4px';
+  exportBtn.style.cursor = 'pointer';
+  exportBtn.style.display = 'none'; // Hide the export button
+  document.body.appendChild(exportBtn);
+
+  // Remove the export button's event listener since it's hidden
+  // (No need to define the click handler if it's not visible)
+
   const qualityPanel = document.createElement('div');
   qualityPanel.style.position = 'absolute';
   qualityPanel.style.top = '10px';
@@ -343,32 +367,6 @@ function initGraph(nodes, links, schema) {
     Broken References: ${brokenRefs}
   `;
   document.body.appendChild(qualityPanel);
-
-  const exportBtn = document.createElement('button');
-  exportBtn.id = 'exportBtn';
-  exportBtn.textContent = 'Export Data';
-  exportBtn.style.position = 'absolute';
-  exportBtn.style.bottom = '10px';
-  exportBtn.style.right = '10px';
-  exportBtn.style.padding = '8px 12px';
-  exportBtn.style.background = '#333';
-  exportBtn.style.color = '#fff';
-  exportBtn.style.border = '2px solid #fff';
-  exportBtn.style.borderRadius = '4px';
-  exportBtn.style.cursor = 'pointer';
-  document.body.appendChild(exportBtn);
-
-  exportBtn.addEventListener('click', () => {
-    const data = { nodes: nodes.filter(n => n.visible !== false), links };
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'schema-export.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
 
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
