@@ -62,7 +62,7 @@ function processSchema(schema) {
       const hasDesc = !!data.description || !!data.$comment;
       const hasProps = properties.length > 0;
       const hasEnum = Array.isArray(data.enum) && data.enum.length > 0;
-      const completeness = (hasTitle + hasDesc + hasProps + hasEnum) / 4 * 100;
+      const completeness = (hasTitle + hasDesc + (hasProps || hasEnum)) / 3 * 100; // Updated formula
       nodes.push({
         id,
         name: data.title || id,
@@ -71,6 +71,7 @@ function processSchema(schema) {
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
         properties,
+        enum: data.enum || [], // Store enum array in node
         completeness,
         cluster: type === 'entity' ? id : null
       });
@@ -177,7 +178,7 @@ function initGraph(nodes, links, schema) {
       tooltip.style.top = `${mouseY + 10}px`;
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
-        : node.enum ? `Enum: ${node.enum.join(', ')}` : 'None';
+        : node.enum && node.enum.length > 0 ? `Enum: ${node.enum.join(', ').substring(0, 100)}${node.enum.join(', ').length > 100 ? '...' : ''}` : 'None';
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
         <em>Type:</em> ${node.type}<br/>
