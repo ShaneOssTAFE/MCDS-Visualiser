@@ -183,7 +183,6 @@ function initGraph(nodes, links, schema) {
       const hasTitle = !!schemaNode.title;
       const descriptionText = node.description === null ? 'N/A' : (node.description === '' ? '(empty)' : node.description);
       const hasDesc = node.description !== null; // Attribute exists
-      const isDescEmpty = node.description === ''; // Attribute exists but is empty
       const hasProps = node.properties.length > 0;
       const hasEnum = Array.isArray(schemaNode.enum) && schemaNode.enum.length > 0;
       const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(schemaNode.type);
@@ -191,8 +190,9 @@ function initGraph(nodes, links, schema) {
       if (node.completeness < 100) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
-        if (hasDesc && isDescEmpty) qualityIssues.push('Empty description');
-        if (!(hasProps || hasEnum || isSimpleTypeComplete)) qualityIssues.push('Missing properties or enum');
+        // No "Empty description" issue, as empty is considered valid
+        if (!hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing properties');
+        if (!hasEnum && !isSimpleTypeComplete) qualityIssues.push('Missing enum');
       }
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
