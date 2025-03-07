@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, initializing graph');
   fetch('schema.json')
     .then(response => response.json())
     .then(schema => {
@@ -41,7 +42,6 @@ function processSchema(schema) {
         const avgCompleteness = referencedDefs.reduce((sum, def) => sum + def.completeness, 0) / referencedDefs.length;
         node.completeness = avgCompleteness;
       } else {
-        // Fallback if no definitions (based on title/description)
         const hasTitle = !!schema.properties[node.id].title;
         const hasDesc = !!(schema.properties[node.id].description || schema.properties[node.id].$comment);
         node.completeness = (hasTitle + hasDesc) / 2 * 100 || 0;
@@ -107,6 +107,65 @@ function processSchema(schema) {
 }
 
 function initGraph(nodes, links, schema) {
+  console.log('initGraph called with nodes:', nodes.length, 'links:', links.length);
+
+  // Initialize controls first to ensure they are set up before graph rendering
+  const searchInput = document.getElementById('search');
+  const filterEntitiesBtn = document.getElementById('filterEntities');
+  const filterDefsBtn = document.getElementById('filterDefs');
+  const resetViewBtn = document.getElementById('resetView');
+  const controls = document.getElementById('controls');
+
+  if (!controls) {
+    console.error('Controls div not found in the DOM');
+    return;
+  } else {
+    console.log('Controls div found');
+  }
+
+  if (!searchInput || !filterEntitiesBtn || !filterDefsBtn || !resetViewBtn) {
+    console.error('One or more control elements are missing:', {
+      searchInput: !!searchInput,
+      filterEntitiesBtn: !!filterEntitiesBtn,
+      filterDefsBtn: !!filterDefsBtn,
+      resetViewBtn: !!resetViewBtn
+    });
+    return;
+  }
+
+  // Create and position the completeness slider and label
+  const completenessFilter = document.createElement('input');
+  completenessFilter.type = 'range';
+  completenessFilter.min = '0';
+  completenessFilter.max = '100';
+  completenessFilter.value = '0';
+  completenessFilter.style.width = '200px';
+  completenessFilter.style.margin = '5px';
+
+  const completenessLabel = document.createElement('span');
+  completenessLabel.textContent = 'Min Completeness: 0%';
+
+  // Create Save View and Restore View buttons
+  let savedPosition = null;
+  const saveViewBtn = document.createElement('button');
+  saveViewBtn.textContent = 'Save View';
+  saveViewBtn.style.margin = '5px';
+
+  const restoreViewBtn = document.createElement('button');
+  restoreViewBtn.textContent = 'Restore View';
+  restoreViewBtn.style.margin = '5px';
+
+  // Insert the slider, label, and buttons
+  try {
+    controls.insertBefore(completenessFilter, resetViewBtn);
+    controls.insertBefore(completenessLabel, resetViewBtn);
+    controls.appendChild(saveViewBtn);
+    controls.appendChild(restoreViewBtn);
+    console.log('Controls elements inserted successfully');
+  } catch (error) {
+    console.error('Error inserting controls elements:', error);
+  }
+
   const Graph = ForceGraph3D()(document.getElementById('graph'));
 
   Graph.graphData({ nodes, links })
@@ -144,24 +203,26 @@ function initGraph(nodes, links, schema) {
     .linkDirectionalArrowRelPos(1)
     .backgroundColor('#1a1a1a')
     .forceEngine('d3')
-    .d3Force('cluster', nodeArray => {
-      if (!Array.isArray(nodeArray)) {
-        console.error('Cluster force received invalid nodes:', nodeArray);
-        return;
-      }
-      const clusters = {};
-      nodeArray.forEach(node => {
-        const clusterId = node.cluster || 'misc';
-        if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
-        clusters[clusterId].x += node.x || 0;
-        clusters[clusterId].y += node.y || 0;
-        clusters[clusterId].count++;
-      });
-      nodeArray.forEach(node => {
-        const cluster = clusters[node.cluster || 'misc'];
-        node.vx += (cluster.x / cluster.count - node.x) * 0.05;
-        node.vy += (cluster.y / cluster.count - node.y) * 0.05;
-      });
+    .d3Force('cluster', () => {
+      // Custom force to cluster nodes by their cluster property
+      return (simulation) => {
+        const nodes = simulation.nodes();
+        const clusters = {};
+        nodes.forEach(node => {
+          const clusterId = node.cluster || 'misc';
+          if (!clusters[clusterId]) clusters[clusterId] = { x: 0, y: 0, count: 0 };
+          clusters[clusterId].x += node.x || 0;
+          clusters[clusterId].y += node.y || 0;
+          clusters[clusterId].count++;
+        });
+        nodes.forEach(node => {
+          const cluster = clusters[node.cluster || 'misc'];
+          const dx = (cluster.x / cluster.count - node.x) * 0.05;
+          const dy = (cluster.y / cluster.count - node.y) * 0.05;
+          node.vx = (node.vx || 0) + dx;
+          node.vy = (node.vy || 0) + dy;
+        });
+      };
     });
 
   let mouseX = 0, mouseY = 0;
@@ -256,23 +317,19 @@ function initGraph(nodes, links, schema) {
     Graph.graphData({ nodes: nodes.filter(n => n.visible !== false), links });
   }
 
-  const searchInput = document.getElementById('search');
   searchInput.addEventListener('input', e => {
     const term = e.target.value.toLowerCase();
     updateVisibility(node => node.name.toLowerCase().includes(term));
   });
 
-  const filterEntitiesBtn = document.getElementById('filterEntities');
   filterEntitiesBtn.addEventListener('click', () => {
     updateVisibility(node => node.type === 'entity');
   });
 
-  const filterDefsBtn = document.getElementById('filterDefs');
   filterDefsBtn.addEventListener('click', () => {
     updateVisibility(node => node.type === 'definition');
   });
 
-  const resetViewBtn = document.getElementById('resetView');
   resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
     Graph.zoomToFit(1000, 100);
@@ -281,44 +338,11 @@ function initGraph(nodes, links, schema) {
     resetViewBtn.blur();
   });
 
-  // Create and position the completeness slider and label
-  const completenessFilter = document.createElement('input');
-  completenessFilter.type = 'range';
-  completenessFilter.min = '0';
-  completenessFilter.max = '100';
-  completenessFilter.value = '0';
-  completenessFilter.style.width = '200px';
-  completenessFilter.style.margin = '5px';
-
-  const completenessLabel = document.createElement('span');
-  completenessLabel.textContent = 'Min Completeness: 0%';
   completenessFilter.addEventListener('input', e => {
     const minCompleteness = parseInt(e.target.value);
     completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
     updateVisibility(node => node.completeness >= minCompleteness);
   });
-
-  // Insert the slider and label between filterDefsBtn and resetViewBtn
-  const controls = document.getElementById('controls');
-  if (controls) {
-    console.log('Controls div found, adding slider and label');
-    controls.insertBefore(completenessFilter, resetViewBtn);
-    controls.insertBefore(completenessLabel, resetViewBtn);
-  } else {
-    console.error('Controls div not found in the DOM');
-  }
-
-  // Create and append Save View and Restore View buttons
-  let savedPosition = null;
-  const saveViewBtn = document.createElement('button');
-  saveViewBtn.textContent = 'Save View';
-  saveViewBtn.style.margin = '5px';
-  controls.appendChild(saveViewBtn);
-  
-  const restoreViewBtn = document.createElement('button');
-  restoreViewBtn.textContent = 'Restore View';
-  restoreViewBtn.style.margin = '5px';
-  controls.appendChild(restoreViewBtn);
 
   saveViewBtn.addEventListener('click', () => {
     savedPosition = Graph.cameraPosition();
@@ -331,25 +355,6 @@ function initGraph(nodes, links, schema) {
     }
     restoreViewBtn.blur();
   });
-
-  // Create and hide the export button
-  const exportBtn = document.createElement('button');
-  exportBtn.id = 'exportBtn';
-  exportBtn.textContent = 'Export Data';
-  exportBtn.style.position = 'absolute';
-  exportBtn.style.bottom = '10px';
-  exportBtn.style.right = '10px';
-  exportBtn.style.padding = '8px 12px';
-  exportBtn.style.background = '#333';
-  exportBtn.style.color = '#fff';
-  exportBtn.style.border = '2px solid #fff';
-  exportBtn.style.borderRadius = '4px';
-  exportBtn.style.cursor = 'pointer';
-  exportBtn.style.display = 'none'; // Hide the export button
-  document.body.appendChild(exportBtn);
-
-  // Remove the export button's event listener since it's hidden
-  // (No need to define the click handler if it's not visible)
 
   const qualityPanel = document.createElement('div');
   qualityPanel.style.position = 'absolute';
@@ -367,6 +372,22 @@ function initGraph(nodes, links, schema) {
     Broken References: ${brokenRefs}
   `;
   document.body.appendChild(qualityPanel);
+
+  // Export button remains hidden as per previous update
+  const exportBtn = document.createElement('button');
+  exportBtn.id = 'exportBtn';
+  exportBtn.textContent = 'Export Data';
+  exportBtn.style.position = 'absolute';
+  exportBtn.style.bottom = '10px';
+  exportBtn.style.right = '10px';
+  exportBtn.style.padding = '8px 12px';
+  exportBtn.style.background = '#333';
+  exportBtn.style.color = '#fff';
+  exportBtn.style.border = '2px solid #fff';
+  exportBtn.style.borderRadius = '4px';
+  exportBtn.style.cursor = 'pointer';
+  exportBtn.style.display = 'none';
+  document.body.appendChild(exportBtn);
 
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
