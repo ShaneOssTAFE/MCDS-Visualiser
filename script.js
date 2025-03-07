@@ -55,16 +55,13 @@ function processSchema(schema) {
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
             type: prop.type || (prop['$ref'] ? prop['$ref'].split('/').pop() : 'unknown'),
-            description: prop.description || '',
-            required: (data.required || []).includes(propName)
+            description: prop.description || ''
           }))
         : [];
       const hasTitle = !!data.title;
       const hasDesc = !!data.description;
       const hasProps = properties.length > 0;
-      const completeness = type === 'definition' 
-        ? (hasTitle + hasDesc + (properties.filter(p => p.required).length > 0 ? 1 : 0)) / 3 * 100 
-        : 0; // Entities get updated later
+      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100; // Simplified without required check
       nodes.push({
         id,
         name: data.title || id,
@@ -178,7 +175,7 @@ function initGraph(nodes, links, schema) {
       tooltip.style.left = `${mouseX + 10}px`;
       tooltip.style.top = `${mouseY + 10}px`;
       const propList = node.properties.length > 0 
-        ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''} ${p.required ? '(Required)' : ''}`).join('<br/>')
+        ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
         : 'None';
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
