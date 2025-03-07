@@ -269,6 +269,30 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
+  const completenessFilter = document.createElement('input');
+  completenessFilter.type = 'range';
+  completenessFilter.min = '0';
+  completenessFilter.max = '100';
+  completenessFilter.value = '0';
+  completenessFilter.style.width = '200px';
+  completenessFilter.style.margin = '5px';
+  
+  const completenessLabel = document.createElement('span');
+  completenessLabel.textContent = 'Min Completeness: 0%';
+  completenessFilter.addEventListener('input', e => {
+    const minCompleteness = parseInt(e.target.value);
+    completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
+    updateVisibility(node => node.completeness >= minCompleteness);
+  });
+
+  // Add controls in the desired order
+  const controls = document.getElementById('controls');
+  controls.appendChild(searchInput);
+  controls.appendChild(filterEntitiesBtn);
+  controls.appendChild(filterDefsBtn);
+  controls.appendChild(completenessFilter);
+  controls.appendChild(completenessLabel);
+
   const resetViewBtn = document.getElementById('resetView');
   resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
@@ -277,36 +301,18 @@ function initGraph(nodes, links, schema) {
     searchInput.value = '';
     resetViewBtn.blur();
   });
-
-  const completenessFilter = document.createElement('input');
-  completenessFilter.type = 'range';
-  completenessFilter.min = '0';
-  completenessFilter.max = '100';
-  completenessFilter.value = '0';
-  completenessFilter.style.width = '200px';
-  completenessFilter.style.margin = '5px';
-  document.getElementById('controls').appendChild(completenessFilter);
-
-  const completenessLabel = document.createElement('span');
-  completenessLabel.textContent = 'Min Completeness: 0%';
-  document.getElementById('controls').appendChild(completenessLabel);
-
-  completenessFilter.addEventListener('input', e => {
-    const minCompleteness = parseInt(e.target.value);
-    completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
-    updateVisibility(node => node.completeness >= minCompleteness);
-  });
+  controls.appendChild(resetViewBtn);
 
   let savedPosition = null;
   const saveViewBtn = document.createElement('button');
   saveViewBtn.textContent = 'Save View';
   saveViewBtn.style.margin = '5px';
-  document.getElementById('controls').appendChild(saveViewBtn);
+  controls.appendChild(saveViewBtn);
   
   const restoreViewBtn = document.createElement('button');
   restoreViewBtn.textContent = 'Restore View';
   restoreViewBtn.style.margin = '5px';
-  document.getElementById('controls').appendChild(restoreViewBtn);
+  controls.appendChild(restoreViewBtn);
 
   saveViewBtn.addEventListener('click', () => {
     savedPosition = Graph.cameraPosition();
@@ -320,30 +326,9 @@ function initGraph(nodes, links, schema) {
     restoreViewBtn.blur();
   });
 
-  const legend = document.createElement('div');
-  legend.style.position = 'absolute';
-  legend.style.top = '10px';
-  legend.style.right = '10px';
-  legend.style.background = 'rgba(0, 0, 0, 0.8)';
-  legend.style.padding = '10px';
-  legend.style.color = '#fff';
-  legend.style.borderRadius = '5px';
-  legend.innerHTML = `
-    <div id="legend-entities" style="cursor:pointer"><span style="color:#00FF00">■</span> Entities</div>
-    <div id="legend-defs" style="cursor:pointer"><span style="color:#FF00FF">■</span> Definitions</div>
-  `;
-  document.body.appendChild(legend);
-
-  document.getElementById('legend-entities').addEventListener('click', () => {
-    updateVisibility(node => node.type === 'entity');
-  });
-  document.getElementById('legend-defs').addEventListener('click', () => {
-    updateVisibility(node => node.type === 'definition');
-  });
-
   const qualityPanel = document.createElement('div');
   qualityPanel.style.position = 'absolute';
-  qualityPanel.style.top = '60px';
+  qualityPanel.style.top = '10px';
   qualityPanel.style.right = '10px';
   qualityPanel.style.background = 'rgba(0, 0, 0, 0.8)';
   qualityPanel.style.padding = '10px';
