@@ -43,7 +43,7 @@ function processSchema(schema) {
       } else {
         // Fallback if no definitions (based on title/description)
         const hasTitle = !!schema.properties[node.id].title;
-        const hasDesc = !!schema.properties[node.id].description || !!schema.properties[node.id].$comment;
+        const hasDesc = !!(schema.properties[node.id].description || schema.properties[node.id].$comment);
         node.completeness = (hasTitle + hasDesc) / 2 * 100 || 0;
       }
     }
@@ -59,7 +59,8 @@ function processSchema(schema) {
           }))
         : [];
       const hasTitle = !!data.title;
-      const hasDesc = !!data.description || !!data.$comment;
+      const description = data.description || data.$comment || null; // Use null to indicate missing
+      const hasDesc = description !== null; // Presence of description attribute
       const hasProps = properties.length > 0;
       const hasEnum = Array.isArray(data.enum) && data.enum.length > 0;
       const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(data.type);
@@ -68,7 +69,7 @@ function processSchema(schema) {
         id,
         name: data.title || id,
         type,
-        description: data.description || data.$comment || '',
+        description, // Store as null if missing, or the actual string
         group: type === 'entity' ? 0 : 1,
         size: type === 'entity' ? 8 : 6,
         properties,
@@ -180,7 +181,9 @@ function initGraph(nodes, links, schema) {
       const schemaNode = node.type === 'entity' ? schema.properties[node.id] : schema.definitions[node.id];
       const nodeType = schemaNode.type || (node.properties.length > 0 ? 'object' : 'unknown');
       const hasTitle = !!schemaNode.title;
-      const hasDesc = !!schemaNode.description || !!schemaNode.$comment;
+      const descriptionText = node.description === null ? 'N/A' : (node.description === '' ? '(empty)' : node.description);
+      const hasDesc = node.description !== null; // Attribute exists
+      const isDescEmpty = node.description === ''; // Attribute exists but is empty
       const hasProps = node.properties.length > 0;
       const hasEnum = Array.isArray(schemaNode.enum) && schemaNode.enum.length > 0;
       const isSimpleTypeComplete = !hasProps && !hasEnum && ['string', 'integer', 'number', 'boolean'].includes(schemaNode.type);
@@ -188,6 +191,7 @@ function initGraph(nodes, links, schema) {
       if (node.completeness < 100) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
+        if (hasDesc && isDescEmpty) qualityIssues.push('Empty description');
         if (!(hasProps || hasEnum || isSimpleTypeComplete)) qualityIssues.push('Missing properties or enum');
       }
       const propList = node.properties.length > 0 
@@ -196,7 +200,7 @@ function initGraph(nodes, links, schema) {
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
         <em>Type:</em> ${nodeType}<br/>
-        <em>Description:</em> ${node.description || 'N/A'}<br/>
+        <em>Description:</em> ${descriptionText}<br/>
         <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
         <em>Properties/Enum:</em><br/>${propList}
         ${qualityIssues.length > 0 ? `<br/><em>Data Quality Issues:</em> ${qualityIssues.join(', ')}` : ''}
@@ -269,30 +273,6 @@ function initGraph(nodes, links, schema) {
     updateVisibility(node => node.type === 'definition');
   });
 
-  const completenessFilter = document.createElement('input');
-  completenessFilter.type = 'range';
-  completenessFilter.min = '0';
-  completenessFilter.max = '100';
-  completenessFilter.value = '0';
-  completenessFilter.style.width = '200px';
-  completenessFilter.style.margin = '5px';
-  
-  const completenessLabel = document.createElement('span');
-  completenessLabel.textContent = 'Min Completeness: 0%';
-  completenessFilter.addEventListener('input', e => {
-    const minCompleteness = parseInt(e.target.value);
-    completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
-    updateVisibility(node => node.completeness >= minCompleteness);
-  });
-
-  // Add controls in the desired order
-  const controls = document.getElementById('controls');
-  controls.appendChild(searchInput);
-  controls.appendChild(filterEntitiesBtn);
-  controls.appendChild(filterDefsBtn);
-  controls.appendChild(completenessFilter);
-  controls.appendChild(completenessLabel);
-
   const resetViewBtn = document.getElementById('resetView');
   resetViewBtn.addEventListener('click', () => {
     Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, null, 1000);
@@ -301,7 +281,28 @@ function initGraph(nodes, links, schema) {
     searchInput.value = '';
     resetViewBtn.blur();
   });
-  controls.appendChild(resetViewBtn);
+
+  // Create and position the completeness slider and label
+  const completenessFilter = document.createElement('input');
+  completenessFilter.type = 'range';
+  completenessFilter.min = '0';
+  completenessFilter.max = '100';
+  completenessFilter.value = '0';
+  completenessFilter.style.width = '200px';
+  completenessFilter.style.margin = '5px';
+
+  const completenessLabel = document.createElement('span');
+  completenessLabel.textContent = 'Min Completeness: 0%';
+  completenessFilter.addEventListener('input', e => {
+    const minCompleteness = parseInt(e.target.value);
+    completenessLabel.textContent = `Min Completeness: ${minCompleteness}%`;
+    updateVisibility(node => node.completeness >= minCompleteness);
+  });
+
+  // Insert the slider and label between filterDefsBtn and resetViewBtn
+  const controls = document.getElementById('controls');
+  controls.insertBefore(completenessFilter, resetViewBtn);
+  controls.insertBefore(completenessLabel, resetViewBtn);
 
   let savedPosition = null;
   const saveViewBtn = document.createElement('button');
