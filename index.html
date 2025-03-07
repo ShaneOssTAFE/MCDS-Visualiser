@@ -18,7 +18,7 @@
     color: #fff; 
     font-size: 16px; 
   }
-  #controls { 
+  /*#controls { 
     position: absolute; 
     top: 10px; 
     left: 10px; 
@@ -27,6 +27,13 @@
     padding: 15px; 
     border-radius: 8px; 
     box-shadow: 0 0 5px rgba(255, 255, 255, 0.2); 
+  }*/
+  #controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    padding: 5px;
   }
   #controls input, #controls button { 
     margin: 5px; 
@@ -61,11 +68,11 @@
 <body>
     <div id="graph"></div>
     <div id="tooltip" role="tooltip" aria-live="polite"></div>
-    <div id="controls" role="region" aria-label="Graph Controls">
-        <input id="search" type="text" placeholder="Search nodes..." aria-label="Search nodes">
-        <button id="filterEntities" aria-label="Filter to show only entities">Entities</button>
-        <button id="filterDefs" aria-label="Filter to show only definitions">Definitions</button>
-        <button id="resetView" aria-label="Reset graph view">Reset View</button>
+    <div id="controls">
+      <input id="search" type="text" placeholder="Search nodes...">
+      <button id="filterEntities">Entities</button>
+      <button id="filterDefs">Definitions</button>
+      <button id="resetView">Reset View</button>
     </div>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
