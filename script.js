@@ -190,9 +190,8 @@ function initGraph(nodes, links, schema) {
       if (node.completeness < 100) {
         if (!hasTitle) qualityIssues.push('Missing title');
         if (!hasDesc) qualityIssues.push('Missing description');
-        // No "Empty description" issue, as empty is considered valid
         if (!hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing properties');
-        if (!hasEnum && !isSimpleTypeComplete) qualityIssues.push('Missing enum');
+        if (!hasEnum && !hasProps && !isSimpleTypeComplete) qualityIssues.push('Missing enum'); // Only if no properties and not simple type
       }
       const propList = node.properties.length > 0 
         ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
