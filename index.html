@@ -18,14 +18,24 @@
     color: #fff; 
     font-size: 16px; 
   }
-  #controls {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 5px;
-    padding: 5px;
+  #controls { 
+    position: absolute; 
+    top: 10px; 
+    left: 10px; 
+    z-index: 10; 
+    background: rgba(0, 0, 0, 0.8); 
+    padding: 15px; 
+    border-radius: 8px; 
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.2); 
+    display: flex; /* Ensure flex layout */
+    flex-direction: row; /* Ensure horizontal layout */
+    align-items: center; /* Align items vertically */
+    gap: 5px; /* Space between elements */
+    padding: 5px; /* Inner padding */
+    opacity: 1; /* Ensure not hidden by opacity */
+    visibility: visible; /* Ensure not hidden by visibility */
   }
-  #controls input, #controls button { 
+  #controls input, #controls button, #controls span { 
     margin: 5px; 
     padding: 8px 12px; 
     background: #333; 
@@ -34,6 +44,7 @@
     border-radius: 4px; 
     font-size: 16px; 
     cursor: pointer; 
+    display: inline-block; /* Ensure elements are displayed */
   }
   #controls input:focus, #controls button:focus { 
     outline: 3px solid #00FFFF; 
