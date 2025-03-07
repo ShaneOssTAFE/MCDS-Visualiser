@@ -1,10 +1,10 @@
-MCDS Student Lifecycle Visualisation
+MCDS Student Lifecycle Visualiser
 
 ![image](https://github.com/user-attachments/assets/33790786-85c8-4830-8149-8890e0363b48)
 
 Overview
 
-The MCDS Student Lifecycle Visualisation is an interactive 3D force-directed graph that visualises the relationships and data quality of entities and definitions within a schema, specifically tailored for MCDS. Built using 3D Force Graph and Three.js, this tool provides a dynamic way to explore schema structures, identify data quality issues, and interact with complex relationships.
+The MCDS Student Lifecycle Visualiser is an interactive 3D force-directed graph that visualises the relationships and data quality of entities and definitions within a schema, specifically tailored for MCDS. Built using 3D Force Graph and Three.js, this tool provides a dynamic way to explore schema structures, identify data quality issues, and interact with complex relationships.
 
 The visualisation highlights entities (e.g., student-related data) and their definitions, with nodes color-coded based on data completeness and links representing references between them. It includes interactive features like filtering, searching, zooming, and saving/restoring views, making it a powerful tool for schema analysis and data quality assessment.
 
