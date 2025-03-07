@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>MCDS Student Lifecycle Visualization</title>
 <style>
-  /* Existing styles */
   body { margin: 0; background: #1a1a1a; color: #fff; font-family: 'Arial', sans-serif; overflow: hidden; }
   #graph { width: 100vw; height: 100vh; }
   #tooltip { 
@@ -27,13 +26,13 @@
     padding: 15px; 
     border-radius: 8px; 
     box-shadow: 0 0 5px rgba(255, 255, 255, 0.2); 
-    display: flex; /* Ensure flex layout */
-    flex-direction: row; /* Ensure horizontal layout */
-    align-items: center; /* Align items vertically */
-    gap: 5px; /* Space between elements */
-    padding: 5px; /* Inner padding */
-    opacity: 1; /* Ensure not hidden by opacity */
-    visibility: visible; /* Ensure not hidden by visibility */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    padding: 5px;
+    opacity: 1;
+    visibility: visible;
   }
   #controls input, #controls button, #controls span { 
     margin: 5px; 
@@ -44,7 +43,7 @@
     border-radius: 4px; 
     font-size: 16px; 
     cursor: pointer; 
-    display: inline-block; /* Ensure elements are displayed */
+    display: inline-block;
   }
   #controls input:focus, #controls button:focus { 
     outline: 3px solid #00FFFF; 
@@ -54,9 +53,9 @@
     background: #222; 
     width: 200px; 
   }
-  .scene-tooltip { display: none !important; }
-
-  /* New styles for hover/focus */
+  .scene-tooltip {
+    display: none !important;
+  }
   #controls button:hover, #controls button:focus, #exportBtn:hover, #exportBtn:focus {
     background: #00FFFF;
     color: #000;
