@@ -199,7 +199,7 @@ function initGraph(nodes, links, schema) {
         <em>Description:</em> ${node.description || 'N/A'}<br/>
         <em>Completeness:</em> ${node.completeness.toFixed(0)}%<br/>
         <em>Properties/Enum:</em><br/>${propList}
-        ${qualityIssues.length > 0 ? `<br/><em>Data Quality Issues:</em><br/>${qualityIssues.join('<br/>')}` : ''}
+        ${qualityIssues.length > 0 ? `<br/><em>Data Quality Issues:</em> ${qualityIssues.join(', ')}` : ''}
       `;
       node.highlighted = true;
       links.forEach(l => {
