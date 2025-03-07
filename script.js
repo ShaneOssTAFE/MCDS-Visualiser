@@ -13,6 +13,7 @@ function processSchema(schema) {
   const links = [];
   const seenNodes = new Set();
 
+  // First pass: Add all nodes
   Object.entries(schema.properties).forEach(([id, entity]) => {
     addNode(id, entity, 'entity');
   });
@@ -21,6 +22,7 @@ function processSchema(schema) {
     addNode(id, definition, 'definition');
   });
 
+  // Second pass: Create links and assign clusters
   nodes.forEach(node => {
     const schemaNode = node.type === 'entity' 
       ? schema.properties[node.id]
@@ -28,19 +30,41 @@ function processSchema(schema) {
     traverseProperties(schemaNode, node.id);
   });
 
+  // Third pass: Update entity completeness based on referenced definitions
+  nodes.forEach(node => {
+    if (node.type === 'entity') {
+      const referencedDefs = links
+        .filter(link => link.source.id === node.id)
+        .map(link => nodes.find(n => n.id === link.target.id))
+        .filter(n => n && n.type === 'definition');
+      if (referencedDefs.length > 0) {
+        const avgCompleteness = referencedDefs.reduce((sum, def) => sum + def.completeness, 0) / referencedDefs.length;
+        node.completeness = avgCompleteness;
+      } else {
+        // Fallback if no definitions (based on title/description)
+        const hasTitle = !!schema.properties[node.id].title;
+        const hasDesc = !!schema.properties[node.id].description;
+        node.completeness = (hasTitle + hasDesc) / 2 * 100 || 0;
+      }
+    }
+  });
+
   function addNode(id, data, type) {
-    if (!seenNodes.has(id) && (data.properties || type === 'entity')) {
+    if (!seenNodes.has(id) && (data.properties || type === 'entity' || type === 'definition')) {
       const properties = data.properties 
         ? Object.entries(data.properties).map(([propName, prop]) => ({
             name: propName,
             type: prop.type || (prop['$ref'] ? prop['$ref'].split('/').pop() : 'unknown'),
-            description: prop.description || ''
+            description: prop.description || '',
+            required: (data.required || []).includes(propName)
           }))
         : [];
       const hasTitle = !!data.title;
       const hasDesc = !!data.description;
       const hasProps = properties.length > 0;
-      const completeness = (hasTitle + hasDesc + hasProps) / 3 * 100;
+      const completeness = type === 'definition' 
+        ? (hasTitle + hasDesc + (properties.filter(p => p.required).length > 0 ? 1 : 0)) / 3 * 100 
+        : 0; // Entities get updated later
       nodes.push({
         id,
         name: data.title || id,
@@ -67,12 +91,6 @@ function processSchema(schema) {
           if (!sourceNode.cluster) sourceNode.cluster = targetId;
         } else {
           nodes.find(n => n.id === sourceId).hasBrokenRef = true;
-        }
-        if (key.endsWith('ID') && targetId.endsWith('ID')) {
-          const entityName = targetId.replace('ID', 's');
-          if (seenNodes.has(entityName)) {
-            links.push({ source: sourceId, target: entityName });
-          }
         }
       } else if (value && typeof value === 'object') {
         if (Array.isArray(value)) {
@@ -128,7 +146,7 @@ function initGraph(nodes, links, schema) {
     .d3Force('cluster', nodeArray => {
       if (!Array.isArray(nodeArray)) {
         console.error('Cluster force received invalid nodes:', nodeArray);
-        return; // Exit early if nodes is not an array
+        return;
       }
       const clusters = {};
       nodeArray.forEach(node => {
@@ -160,7 +178,7 @@ function initGraph(nodes, links, schema) {
       tooltip.style.left = `${mouseX + 10}px`;
       tooltip.style.top = `${mouseY + 10}px`;
       const propList = node.properties.length > 0 
-        ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''}`).join('<br/>')
+        ? node.properties.map(p => `${p.name}: ${p.type}${p.description ? ' - ' + p.description : ''} ${p.required ? '(Required)' : ''}`).join('<br/>')
         : 'None';
       tooltip.innerHTML = `
         <strong>${node.name}</strong><br/>
@@ -180,16 +198,15 @@ function initGraph(nodes, links, schema) {
         }
       });
     }
-    Graph.nodeColor(n => n.highlighted ? '#FFFF00' : (n.completeness === 100 ? (n.group === 0 ? '#00FF00' : '#FF00FF') : n.completeness >= 50 ? '#FFFF00' : '#FF0000'))
+    Graph.nodeColor(n => n.highlighted ? '#FFFF00' : (n.completeness === 100 ? (node.group === 0 ? '#00FF00' : '#FF00FF') : n.completeness >= 50 ? '#FFFF00' : '#FF0000'))
          .linkColor(l => l.highlighted ? '#FFFF00' : '#FFFFFF');
   });
 
   let lastClickTime = 0;
-  const doubleClickThreshold = 300; // milliseconds
+  const doubleClickThreshold = 300;
   Graph.onNodeClick(node => {
     const currentTime = Date.now();
     if (currentTime - lastClickTime < doubleClickThreshold) {
-      // Double-click detected
       const clusterNodes = nodes.filter(n => n.cluster === node.cluster && n.visible !== false);
       const center = clusterNodes.reduce((acc, n) => ({ x: acc.x + n.x, y: acc.y + n.y, z: acc.z + n.z }), { x: 0, y: 0, z: 0 });
       center.x /= clusterNodes.length;
@@ -201,7 +218,6 @@ function initGraph(nodes, links, schema) {
         1000
       );
     } else {
-      // Single-click
       Graph.cameraPosition(
         { x: node.x, y: node.y, z: node.z + 300 },
         node,
